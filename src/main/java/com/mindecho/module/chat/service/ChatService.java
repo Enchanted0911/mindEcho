@@ -128,7 +128,11 @@ public class ChatService {
                                 // 异步提取记忆
                                 memoryService.extractAndSaveMemoryAsync(userId, request.getMessage(), fullResponse.toString());
 
-                                emitter.send(SseEmitter.event().name("done").data("[DONE]"));
+                                try {
+                                    emitter.send(SseEmitter.event().name("done").data("[DONE]"));
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
                                 emitter.complete();
                             }
                     );
