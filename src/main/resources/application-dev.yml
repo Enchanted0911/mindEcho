@@ -1,0 +1,22 @@
+# 开发环境配置 - 请填写实际的配置信息
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/mindecho?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password:   # 请填写数据库密码
+  ai:
+    openai:
+      api-key:  # 请填写 DeepSeek API Key
+
+wechat:
+  appid:   # 请填写微信小程序 AppID
+  secret:  # 请填写微信小程序 Secret
+
+milvus:
+  host: localhost
+  port: 19530
+
+logging:
+  level:
+    com.mindecho: DEBUG
+

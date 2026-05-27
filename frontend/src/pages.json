@@ -1,0 +1,85 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationBarTitleText": "心屿",
+        "navigationBarBackgroundColor": "#0f0f1a",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0f0f1a"
+      }
+    },
+    {
+      "path": "pages/chat/index",
+      "style": {
+        "navigationBarTitleText": "陪伴",
+        "navigationBarBackgroundColor": "#0f0f1a",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0f0f1a"
+      }
+    },
+    {
+      "path": "pages/diary/index",
+      "style": {
+        "navigationBarTitleText": "日记",
+        "navigationBarBackgroundColor": "#0f0f1a",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0f0f1a"
+      }
+    },
+    {
+      "path": "pages/me/index",
+      "style": {
+        "navigationBarTitleText": "我的",
+        "navigationBarBackgroundColor": "#0f0f1a",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0f0f1a"
+      }
+    },
+    {
+      "path": "pages/vip/index",
+      "style": {
+        "navigationBarTitleText": "开通会员",
+        "navigationBarBackgroundColor": "#0f0f1a",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0f0f1a"
+      }
+    }
+  ],
+  "tabBar": {
+    "color": "#666",
+    "selectedColor": "#b89ee8",
+    "backgroundColor": "#13131f",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/chat/index",
+        "text": "陪伴",
+        "iconPath": "static/icons/chat.png",
+        "selectedIconPath": "static/icons/chat-active.png"
+      },
+      {
+        "pagePath": "pages/diary/index",
+        "text": "日记",
+        "iconPath": "static/icons/diary.png",
+        "selectedIconPath": "static/icons/diary-active.png"
+      },
+      {
+        "pagePath": "pages/me/index",
+        "text": "我的",
+        "iconPath": "static/icons/me.png",
+        "selectedIconPath": "static/icons/me-active.png"
+      }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "心屿",
+    "navigationBarBackgroundColor": "#0f0f1a",
+    "backgroundColor": "#0f0f1a",
+    "app-plus": {
+      "background": "#0f0f1a"
+    }
+  }
+}
+
