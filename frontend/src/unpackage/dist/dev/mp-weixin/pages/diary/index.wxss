@@ -1,0 +1,220 @@
+
+.diary-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0f0f1a;
+}
+.diary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 100rpx 32rpx 24rpx;
+  background: rgba(15, 15, 26, 0.95);
+}
+.header-title {
+  font-size: 40rpx;
+  color: #e8d5ff;
+  font-weight: bold;
+}
+.add-btn {
+  background: linear-gradient(135deg, #b89ee8, #8b6fd1);
+  color: white;
+  padding: 16rpx 32rpx;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+}
+.diary-list {
+  flex: 1;
+  padding: 24rpx;
+}
+.loading-tip, .empty-tip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 120rpx 0;
+  gap: 16rpx;
+}
+.empty-emoji { font-size: 80rpx;
+}
+.empty-text { font-size: 34rpx; color: #e8d5ff;
+}
+.empty-desc { font-size: 26rpx; color: #5a5070; text-align: center;
+}
+.diary-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1rpx solid rgba(184, 158, 232, 0.1);
+  border-radius: 24rpx;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+}
+.diary-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+.diary-date { font-size: 28rpx; color: #b89ee8; font-weight: 600;
+}
+.diary-weather { font-size: 26rpx; color: #7a6b9a; margin-left: 12rpx;
+}
+.emotion-badge {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  background: rgba(184, 158, 232, 0.12);
+  padding: 8rpx 20rpx;
+  border-radius: 30rpx;
+}
+.emotion-label { font-size: 24rpx; color: #b89ee8;
+}
+.diary-preview { font-size: 28rpx; color: #9a8aaa; line-height: 1.6;
+}
+.ai-summary-preview {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 16rpx;
+  background: rgba(184, 158, 232, 0.06);
+  padding: 12rpx 16rpx;
+  border-radius: 12rpx;
+}
+.ai-badge { font-size: 24rpx; color: #b89ee8; white-space: nowrap;
+}
+.ai-summary-text { font-size: 24rpx; color: #7a6b9a; flex: 1;
+}
+
+/* 编辑器 */
+.editor-overlay, .detail-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: flex-end;
+  z-index: 100;
+}
+.editor-panel, .detail-panel {
+  background: #1a1a2e;
+  border-top-left-radius: 40rpx;
+  border-top-right-radius: 40rpx;
+  padding: 40rpx 32rpx 80rpx;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.editor-header, .detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32rpx;
+}
+.editor-title, .detail-date-emotion {
+}
+.editor-title {
+  font-size: 36rpx;
+  color: #e8d5ff;
+  font-weight: 600;
+}
+.editor-close, .detail-panel text:last-child {
+  font-size: 36rpx;
+  color: #7a6b9a;
+}
+.section-label {
+  font-size: 26rpx;
+  color: #7a6b9a;
+  display: block;
+  margin: 24rpx 0 16rpx;
+}
+.emotion-scroll { margin-bottom: 8rpx;
+}
+.emotion-row {
+  display: flex;
+  gap: 16rpx;
+  white-space: nowrap;
+  padding-bottom: 8rpx;
+}
+.emotion-pill {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  background: rgba(255,255,255,0.05);
+  border: 1rpx solid rgba(184,158,232,0.1);
+  padding: 16rpx 20rpx;
+  border-radius: 16rpx;
+  flex-shrink: 0;
+}
+.emotion-selected {
+  background: rgba(184,158,232,0.2);
+  border-color: #b89ee8;
+}
+.emotion-pill-emoji { font-size: 36rpx;
+}
+.emotion-pill-label { font-size: 22rpx; color: #b89ee8;
+}
+.weather-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 8rpx;
+}
+.weather-pill {
+  background: rgba(255,255,255,0.05);
+  border: 1rpx solid rgba(184,158,232,0.1);
+  padding: 12rpx 24rpx;
+  border-radius: 30rpx;
+  font-size: 26rpx;
+  color: #9a8aaa;
+}
+.weather-selected {
+  background: rgba(184,158,232,0.2);
+  border-color: #b89ee8;
+  color: #e8d5ff;
+}
+.diary-textarea {
+  width: 100%;
+  min-height: 160rpx;
+  background: rgba(255,255,255,0.04);
+  border: 1rpx solid rgba(184,158,232,0.12);
+  border-radius: 16rpx;
+  padding: 20rpx;
+  font-size: 28rpx;
+  color: #e8d5ff;
+  line-height: 1.6;
+  margin-top: 8rpx;
+}
+.save-btn {
+  width: 100%;
+  height: 96rpx;
+  background: linear-gradient(135deg, #b89ee8, #8b6fd1);
+  color: white;
+  font-size: 32rpx;
+  border-radius: 48rpx;
+  margin-top: 32rpx;
+  border: none;
+}
+
+/* 详情 */
+.detail-date { font-size: 32rpx; color: #b89ee8; font-weight: 600;
+}
+.detail-emotion { font-size: 28rpx; color: #9a8aaa; margin-left: 16rpx;
+}
+.detail-content { max-height: 60vh;
+}
+.detail-text { font-size: 30rpx; color: #c4a8f0; line-height: 1.8; white-space: pre-wrap;
+}
+.ai-section { margin-top: 40rpx; padding-top: 32rpx; border-top: 1rpx solid rgba(255,255,255,0.08);
+}
+.ai-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx;
+}
+.ai-section-title { font-size: 30rpx; color: #b89ee8; font-weight: 600;
+}
+.get-summary-btn { font-size: 26rpx; color: #8b6fd1; background: rgba(139,111,209,0.1); padding: 10rpx 24rpx; border-radius: 30rpx;
+}
+.ai-summary-full { font-size: 28rpx; color: #c4a8f0; line-height: 1.8;
+}
+.ai-summary-placeholder { font-size: 26rpx; color: #5a5070;
+}

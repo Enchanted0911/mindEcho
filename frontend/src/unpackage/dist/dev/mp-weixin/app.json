@@ -1,0 +1,43 @@
+{
+  "pages": [
+    "pages/login/index",
+    "pages/chat/index",
+    "pages/diary/index",
+    "pages/me/index",
+    "pages/vip/index"
+  ],
+  "window": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "心屿",
+    "navigationBarBackgroundColor": "#0f0f1a",
+    "backgroundColor": "#0f0f1a"
+  },
+  "tabBar": {
+    "color": "#666",
+    "selectedColor": "#b89ee8",
+    "backgroundColor": "#13131f",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/chat/index",
+        "text": "陪伴",
+        "iconPath": "static/icons/chat.png",
+        "selectedIconPath": "static/icons/chat-active.png"
+      },
+      {
+        "pagePath": "pages/diary/index",
+        "text": "日记",
+        "iconPath": "static/icons/diary.png",
+        "selectedIconPath": "static/icons/diary-active.png"
+      },
+      {
+        "pagePath": "pages/me/index",
+        "text": "我的",
+        "iconPath": "static/icons/me.png",
+        "selectedIconPath": "static/icons/me-active.png"
+      }
+    ]
+  },
+  "lazyCodeLoading": "requiredComponents",
+  "usingComponents": {}
+}

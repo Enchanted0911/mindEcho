@@ -1,0 +1,152 @@
+
+.vip-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #1a0a2e 0%, #0f0f1a 100%);
+}
+.vip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 100rpx 32rpx 24rpx;
+}
+.back-btn { font-size: 28rpx; color: #b89ee8;
+}
+.header-title { font-size: 36rpx; color: #e8d5ff; font-weight: bold;
+}
+.vip-scroll { flex: 1;
+}
+.vip-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60rpx 32rpx 40rpx;
+  gap: 16rpx;
+}
+.hero-emoji { font-size: 100rpx;
+}
+.hero-title { font-size: 56rpx; color: #f0d060; font-weight: bold; letter-spacing: 4rpx;
+}
+.hero-subtitle { font-size: 28rpx; color: #b89ee8;
+}
+.vip-status-badge {
+  background: rgba(240, 208, 96, 0.2);
+  border: 1rpx solid #f0d060;
+  padding: 12rpx 32rpx;
+  border-radius: 40rpx;
+  margin-top: 8rpx;
+}
+.vip-status-badge text { font-size: 26rpx; color: #f0d060;
+}
+.section-title {
+  font-size: 32rpx;
+  color: #e8d5ff;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 24rpx;
+}
+.benefits-section {
+  padding: 0 32rpx;
+  margin-bottom: 40rpx;
+}
+.benefits-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20rpx;
+}
+.benefit-card {
+  background: rgba(255,255,255,0.04);
+  border: 1rpx solid rgba(184,158,232,0.12);
+  border-radius: 20rpx;
+  padding: 28rpx 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+.benefit-emoji { font-size: 44rpx;
+}
+.benefit-title { font-size: 28rpx; color: #e8d5ff; font-weight: 600;
+}
+.benefit-desc { font-size: 22rpx; color: #7a6b9a; line-height: 1.5;
+}
+.plans-section { padding: 0 32rpx;
+}
+.plans-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+.plan-card {
+  background: rgba(255,255,255,0.04);
+  border: 2rpx solid rgba(184,158,232,0.1);
+  border-radius: 20rpx;
+  padding: 28rpx 32rpx;
+  display: flex;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.plan-selected {
+  border-color: #b89ee8;
+  background: rgba(184,158,232,0.1);
+}
+.plan-popular {
+  border-color: rgba(240, 208, 96, 0.3);
+}
+.plan-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: linear-gradient(135deg, #f0d060, #e0a030);
+  color: #1a0a2e;
+  font-size: 22rpx;
+  padding: 6rpx 20rpx;
+  border-bottom-left-radius: 12rpx;
+  font-weight: bold;
+}
+.plan-info { flex: 1;
+}
+.plan-label { font-size: 30rpx; color: #e8d5ff; font-weight: 600; display: block;
+}
+.plan-duration { font-size: 24rpx; color: #7a6b9a;
+}
+.plan-price-area { text-align: right;
+}
+.plan-price { font-size: 44rpx; color: #f0d060; font-weight: bold; display: block;
+}
+.plan-original { font-size: 24rpx; color: #5a5070; text-decoration: line-through;
+}
+.free-tip {
+  padding: 24rpx 32rpx;
+  text-align: center;
+}
+.free-tip-text { font-size: 24rpx; color: #5a5070;
+}
+.buy-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24rpx 32rpx 60rpx;
+  background: rgba(15,15,26,0.97);
+  border-top: 1rpx solid rgba(255,255,255,0.06);
+  gap: 24rpx;
+}
+.buy-price-info { display: flex; flex-direction: column;
+}
+.buy-label { font-size: 24rpx; color: #7a6b9a;
+}
+.buy-price { font-size: 44rpx; color: #f0d060; font-weight: bold;
+}
+.buy-btn {
+  flex: 1;
+  height: 96rpx;
+  background: linear-gradient(135deg, #f0d060, #e0a030);
+  color: #1a0a2e;
+  font-size: 32rpx;
+  font-weight: bold;
+  border-radius: 48rpx;
+  border: none;
+}
+.buy-btn[disabled] { opacity: 0.5;
+}
