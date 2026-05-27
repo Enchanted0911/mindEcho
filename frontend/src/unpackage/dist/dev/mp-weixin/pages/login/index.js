@@ -24,8 +24,14 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         userStore.setUserInfo(response.userInfo);
         common_vendor.index.switchTab({ url: "/pages/chat/index" });
       } catch (error) {
+        common_vendor.index.__f__("error", "at pages/login/index.vue:33", "Login error:", error);
+        const msg = (error == null ? void 0 : error.errMsg) || "";
+        if (msg.includes("cancel") || msg.includes("deny")) {
+          isLoading.value = false;
+          return;
+        }
         common_vendor.index.showToast({
-          title: "登录失败，请重试",
+          title: (error == null ? void 0 : error.message) || "登录失败，请重试",
           icon: "none",
           duration: 2e3
         });
@@ -49,7 +55,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       }, !isLoading.value ? {} : {}, {
         h: isLoading.value,
         i: isLoading.value,
-        j: common_vendor.o(handleLogin, "a1")
+        j: common_vendor.o(handleLogin, "6e")
       });
     };
   }

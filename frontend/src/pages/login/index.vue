@@ -29,9 +29,16 @@ async function handleLogin() {
 
     // 4. 跳转聊天页
     uni.switchTab({ url: '/pages/chat/index' })
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Login error:', error)
+    // 用户主动取消授权，不弹 toast
+    const msg = error?.errMsg || ''
+    if (msg.includes('cancel') || msg.includes('deny')) {
+      isLoading.value = false
+      return
+    }
     uni.showToast({
-      title: '登录失败，请重试',
+      title: error?.message || '登录失败，请重试',
       icon: 'none',
       duration: 2000
     })
@@ -84,7 +91,6 @@ async function handleLogin() {
         class="login-btn"
         :loading="isLoading"
         :disabled="isLoading"
-        open-type="getPhoneNumber"
         @click="handleLogin"
       >
         <text v-if="!isLoading">微信一键登录</text>
