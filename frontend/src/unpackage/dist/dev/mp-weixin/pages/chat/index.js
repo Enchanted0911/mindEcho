@@ -14,14 +14,69 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     const showSessionPanel = common_vendor.ref(false);
     const showPersonalityPicker = common_vendor.ref(false);
     common_vendor.ref(false);
+    const isLoadingSessions = common_vendor.ref(false);
     const personality = common_vendor.computed(() => utils_emotion.getPersonalityInfo(userStore.currentPersonality));
     const messages = common_vendor.computed(() => chatStore.messages);
     const isStreaming = common_vendor.computed(() => chatStore.isStreaming);
+    const sessions = common_vendor.computed(() => chatStore.sessions);
     common_vendor.onMounted(() => {
+      loadSessions();
       if (chatStore.currentSessionId) {
         loadHistory();
       }
     });
+    async function loadSessions() {
+      isLoadingSessions.value = true;
+      try {
+        const result = await api_chat.getSessionList();
+        chatStore.setSessions(result.records || []);
+      } catch (e) {
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:36", "Load sessions failed:", e);
+      } finally {
+        isLoadingSessions.value = false;
+      }
+    }
+    async function switchSession(sessionId) {
+      chatStore.setCurrentSession(sessionId);
+      chatStore.clearMessages();
+      showSessionPanel.value = false;
+      try {
+        const list = await api_chat.getMessageList(sessionId);
+        list.forEach((msg) => {
+          chatStore.addMessage({
+            id: String(msg.id),
+            role: msg.role,
+            content: msg.content,
+            emotion: msg.emotion,
+            riskLevel: msg.riskLevel,
+            createdAt: utils_emotion.parseDate(msg.createdTime).getTime()
+          });
+        });
+        scrollToMsg();
+      } catch (e) {
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:60", "Switch session failed:", e);
+      }
+    }
+    async function removeSession(sessionId) {
+      common_vendor.index.showModal({
+        title: "删除会话",
+        content: "确认删除这条对话记录？",
+        success: async (res) => {
+          if (res.confirm) {
+            try {
+              await api_chat.deleteSession(sessionId);
+              chatStore.setSessions(sessions.value.filter((s) => s.id !== sessionId));
+              if (chatStore.currentSessionId === sessionId) {
+                chatStore.setCurrentSession(null);
+                chatStore.clearMessages();
+              }
+            } catch (e) {
+              common_vendor.index.showToast({ title: "删除失败", icon: "none" });
+            }
+          }
+        }
+      });
+    }
     async function loadHistory() {
       try {
         const list = await api_chat.getMessageList(chatStore.currentSessionId);
@@ -33,12 +88,12 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
             content: msg.content,
             emotion: msg.emotion,
             riskLevel: msg.riskLevel,
-            createdAt: new Date(msg.createdTime).getTime()
+            createdAt: utils_emotion.parseDate(msg.createdTime).getTime()
           });
         });
         scrollToMsg();
       } catch (e) {
-        common_vendor.index.__f__("error", "at pages/chat/index.vue:44", "Load history failed:", e);
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:102", "Load history failed:", e);
       }
     }
     async function sendMessage() {
@@ -75,7 +130,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           scrollToMsg();
         },
         (err) => {
-          common_vendor.index.__f__("error", "at pages/chat/index.vue:88", "SSE error:", err);
+          common_vendor.index.__f__("error", "at pages/chat/index.vue:146", "SSE error:", err);
           chatStore.finishStreaming(aiMsgId);
           common_vendor.index.showToast({ title: "AI 回复失败，请重试", icon: "none" });
         }
@@ -90,6 +145,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       chatStore.setCurrentSession(null);
       chatStore.clearMessages();
       showSessionPanel.value = false;
+      loadSessions();
     }
     const PERSONALITIES = [
       { code: "gentle_sister", label: "温柔姐姐", emoji: "🌸", desc: "温柔陪伴" },
@@ -153,9 +209,31 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         q: inputText.value.trim() && !isStreaming.value ? 1 : "",
         r: isStreaming.value ? 1 : "",
         s: common_vendor.o(sendMessage, "29"),
-        t: showPersonalityPicker.value
+        t: showSessionPanel.value
+      }, showSessionPanel.value ? common_vendor.e({
+        v: common_vendor.o(($event) => showSessionPanel.value = false, "aa"),
+        w: common_vendor.o(startNewChat, "dd"),
+        x: isLoadingSessions.value
+      }, isLoadingSessions.value ? {} : sessions.value.length === 0 ? {} : {
+        z: common_vendor.f(sessions.value, (session, k0, i0) => {
+          return {
+            a: common_vendor.t(session.title || "新对话"),
+            b: common_vendor.t(session.updatedTime ? session.updatedTime.slice(5, 16) : ""),
+            c: common_vendor.o(($event) => removeSession(session.id), session.id),
+            d: session.id,
+            e: common_vendor.unref(chatStore).currentSessionId === session.id ? 1 : "",
+            f: common_vendor.o(($event) => switchSession(session.id), session.id)
+          };
+        })
+      }, {
+        y: sessions.value.length === 0,
+        A: common_vendor.o(() => {
+        }, "5c"),
+        B: common_vendor.o(($event) => showSessionPanel.value = false, "18")
+      }) : {}, {
+        C: showPersonalityPicker.value
       }, showPersonalityPicker.value ? {
-        v: common_vendor.f(PERSONALITIES, (p, k0, i0) => {
+        D: common_vendor.f(PERSONALITIES, (p, k0, i0) => {
           return {
             a: common_vendor.t(p.emoji),
             b: common_vendor.t(p.label),
@@ -165,7 +243,9 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
             f: common_vendor.o(($event) => selectPersonality(p.code), p.code)
           };
         }),
-        w: common_vendor.o(($event) => showPersonalityPicker.value = false, "2a")
+        E: common_vendor.o(() => {
+        }, "86"),
+        F: common_vendor.o(($event) => showPersonalityPicker.value = false, "92")
       } : {});
     };
   }

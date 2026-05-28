@@ -1,7 +1,7 @@
 import {del, get} from '../utils/request'
 
 export interface ChatSession {
-  id: number
+  id: string   // 后端 Long 序列化为字符串，防止 JS 精度丢失
   title: string
   personality: string
   createdTime: string
@@ -9,7 +9,7 @@ export interface ChatSession {
 }
 
 export interface ChatMessage {
-  id: number
+  id: string   // 后端 Long 序列化为字符串，防止 JS 精度丢失
   role: 'user' | 'assistant'
   content: string
   emotion?: string
@@ -27,14 +27,14 @@ export function getSessionList(page = 1, size = 20) {
 /**
  * 获取会话消息列表
  */
-export function getMessageList(sessionId: number): Promise<ChatMessage[]> {
+export function getMessageList(sessionId: string): Promise<ChatMessage[]> {
   return get<ChatMessage[]>(`/chat/sessions/${sessionId}/messages`)
 }
 
 /**
  * 删除会话
  */
-export function deleteSession(sessionId: number): Promise<void> {
+export function deleteSession(sessionId: string): Promise<void> {
   return del<void>(`/chat/sessions/${sessionId}`)
 }
 
@@ -43,7 +43,7 @@ export function deleteSession(sessionId: number): Promise<void> {
  * 微信小程序使用 RequestTask.onChunkReceived 接收分块数据
  */
 export function createSseConnection(
-  sessionId: number | null,
+  sessionId: string | null,
   message: string,
   onChunk: (text: string) => void,
   onDone: () => void,

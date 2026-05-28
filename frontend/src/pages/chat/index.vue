@@ -3,7 +3,7 @@ import {computed, nextTick, onMounted, ref} from 'vue'
 import {useChatStore} from '../../store/chat'
 import {useUserStore} from '../../store/user'
 import {createSseConnection, deleteSession, getMessageList, getSessionList} from '../../api/chat'
-import {getPersonalityInfo} from '../../utils/emotion'
+import {getPersonalityInfo, parseDate} from '../../utils/emotion'
 
 const chatStore = useChatStore()
 const userStore = useUserStore()
@@ -39,7 +39,7 @@ async function loadSessions() {
   }
 }
 
-async function switchSession(sessionId: number) {
+async function switchSession(sessionId: string) {
   chatStore.setCurrentSession(sessionId)
   chatStore.clearMessages()
   showSessionPanel.value = false
@@ -52,7 +52,7 @@ async function switchSession(sessionId: number) {
         content: msg.content,
         emotion: msg.emotion,
         riskLevel: msg.riskLevel,
-        createdAt: new Date(msg.createdTime).getTime()
+        createdAt: parseDate(msg.createdTime).getTime()
       })
     })
     scrollToMsg()
@@ -61,7 +61,7 @@ async function switchSession(sessionId: number) {
   }
 }
 
-async function removeSession(sessionId: number) {
+async function removeSession(sessionId: string) {
   uni.showModal({
     title: '删除会话',
     content: '确认删除这条对话记录？',
@@ -94,7 +94,7 @@ async function loadHistory() {
         content: msg.content,
         emotion: msg.emotion,
         riskLevel: msg.riskLevel,
-        createdAt: new Date(msg.createdTime).getTime()
+        createdAt: parseDate(msg.createdTime).getTime()
       })
     })
     scrollToMsg()
@@ -277,8 +277,8 @@ async function selectPersonality(code: string) {
     </view>
 
     <!-- 会话列表侧边面板 -->
-    <view v-if="showSessionPanel" class="session-overlay" @click.self="showSessionPanel = false">
-      <view class="session-panel">
+    <view v-if="showSessionPanel" class="session-overlay" @click="showSessionPanel = false">
+      <view class="session-panel" @click.stop>
         <view class="session-panel-header">
           <text class="session-panel-title">历史对话</text>
           <text class="session-panel-close" @click="showSessionPanel = false">✕</text>
@@ -320,8 +320,8 @@ async function selectPersonality(code: string) {
     </view>
 
     <!-- 人格选择器弹窗 -->
-    <view v-if="showPersonalityPicker" class="modal-overlay" @click.self="showPersonalityPicker = false">
-      <view class="personality-picker">
+    <view v-if="showPersonalityPicker" class="modal-overlay" @click="showPersonalityPicker = false">
+      <view class="personality-picker" @click.stop>
         <text class="picker-title">选择 AI 人格</text>
         <view class="personality-grid">
           <view

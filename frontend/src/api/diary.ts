@@ -33,7 +33,7 @@ export function getDiaryByDate(date: string): Promise<DiaryEntry | null> {
 /**
  * 获取 AI 总结
  */
-export function getAiSummary(id: number): Promise<DiaryEntry> {
+export function getAiSummary(id: string): Promise<DiaryEntry> {
   return get<DiaryEntry>(`/diary/${id}/ai-summary`)
 }
 

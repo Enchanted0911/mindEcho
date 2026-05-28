@@ -21,8 +21,11 @@ public class PromptService {
 
     private final MemoryMapper memoryMapper;
 
-    /** 基础 System Prompt */
-    private static final String BASE_SYSTEM_PROMPT = """
+    /**
+     * 静态基础 Prompt 模板（按人格变化，但同一用户/人格不变）
+     * 放在第一条 SystemMessage，最大化 DeepSeek prefix cache 命中率
+     */
+    private static final String STATIC_SYSTEM_PROMPT = """
             你是一位%s的 AI 情绪陪伴助手，名叫"心屿"。
 
             【你的使命】
@@ -45,20 +48,36 @@ public class PromptService {
             - 可以适当使用 emoji 增加温度感
 
             %s
-            %s
             """;
 
     /**
-     * 构建完整 System Prompt
+     * 构建静态 System Prompt（人格设定，内容稳定，便于 DeepSeek prefix cache 缓存）
+     * 应作为第一条 SystemMessage 发送，内容在同一人格下不会变化
      */
-    public String buildSystemPrompt(Long userId, String personalityCode) {
+    public String buildStaticSystemPrompt(String personalityCode) {
         PersonalityEnum personality = PersonalityEnum.fromCode(personalityCode);
-        String memoryContext = buildMemoryContext(userId);
-
-        return String.format(BASE_SYSTEM_PROMPT,
+        return String.format(STATIC_SYSTEM_PROMPT,
                 personality.getName(),
-                personality.getSystemPrompt(),
-                memoryContext);
+                personality.getSystemPrompt());
+    }
+
+    /**
+     * 构建动态记忆上下文（每次对话可能变化）
+     * 应作为第二条 SystemMessage 发送，放在静态 Prompt 之后
+     * 若无记忆则返回 null，调用方可跳过不添加此条消息
+     */
+    public String buildMemorySystemPrompt(Long userId) {
+        return buildMemoryContext(userId);
+    }
+
+    /**
+     * @deprecated 使用 buildStaticSystemPrompt + buildMemorySystemPrompt 替代，以优化缓存命中率
+     */
+    @Deprecated
+    public String buildSystemPrompt(Long userId, String personalityCode) {
+        String memory = buildMemoryContext(userId);
+        return buildStaticSystemPrompt(personalityCode)
+                + (memory.isEmpty() ? "" : "\n" + memory);
     }
 
     /**

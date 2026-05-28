@@ -12,7 +12,7 @@ export interface ChatMessage {
 }
 
 export interface ChatSession {
-  id: number
+  id: string   // 后端 Long 序列化为字符串，防止 JS 精度丢失
   title: string
   personality: string
   createdTime: string
@@ -20,14 +20,14 @@ export interface ChatSession {
 }
 
 export const useChatStore = defineStore('chat', () => {
-  const currentSessionId = ref<number | null>(null)
+  const currentSessionId = ref<string | null>(null)
   const messages = ref<ChatMessage[]>([])
   const sessions = ref<ChatSession[]>([])
   const isLoading = ref(false)
   const isStreaming = ref(false)
   const streamingMessageId = ref<string | null>(null)
 
-  function setCurrentSession(sessionId: number | null) {
+  function setCurrentSession(sessionId: string | null) {
     currentSessionId.value = sessionId
   }
 

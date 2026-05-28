@@ -166,8 +166,8 @@ function formatDate(dateVal: any) {
     </scroll-view>
 
     <!-- 日记编辑器 -->
-    <view v-if="showEditor" class="editor-overlay" @click.self="showEditor = false">
-      <view class="editor-panel">
+    <view v-if="showEditor" class="editor-overlay" @click="showEditor = false">
+      <view class="editor-panel" @click.stop>
         <view class="editor-header">
           <text class="editor-title">记录今天</text>
           <text class="editor-close" @click="showEditor = false">✕</text>
@@ -221,8 +221,8 @@ function formatDate(dateVal: any) {
     </view>
 
     <!-- 日记详情 -->
-    <view v-if="showDetail && selectedDiary" class="detail-overlay" @click.self="showDetail = false">
-      <view class="detail-panel">
+    <view v-if="showDetail && selectedDiary" class="detail-overlay" @click="showDetail = false">
+      <view class="detail-panel" @click.stop>
         <view class="detail-header">
           <view class="detail-date-emotion">
             <text class="detail-date">{{ formatDate(selectedDiary.diaryDate) }}</text>

@@ -2,7 +2,7 @@ import {defineStore} from 'pinia'
 import {ref} from 'vue'
 
 export interface DiaryEntry {
-  id: number
+  id: string   // 后端 Long 序列化为字符串，防止 JS 精度丢失
   diaryDate: string
   emotion: string | null
   emotionIntensity: number | null

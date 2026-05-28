@@ -173,15 +173,30 @@ public class ChatService {
 
     /**
      * 构建消息列表（System Prompt + 记忆 + 历史）
+     *
+     * <p>Prompt Cache 优化策略（DeepSeek prefix cache）：
+     * <ul>
+     *   <li>第一条 SystemMessage：静态人格 Prompt，内容固定，DeepSeek 可稳定缓存前缀</li>
+     *   <li>第二条 SystemMessage（可选）：动态记忆上下文，每次可能不同，放在静态后面</li>
+     *   <li>历史消息 + 当前输入：追加在最后</li>
+     * </ul>
+     * DeepSeek 会自动对 ≥64 tokens 的公共前缀进行缓存，命中时 prompt token 费用降低 90%。
      */
     private List<Message> buildMessages(Long userId, ChatSession session, String userInput) {
         List<Message> messages = new ArrayList<>();
 
-        // 1. System Prompt（人格 + 用户画像 + 记忆）
-        String systemPrompt = promptService.buildSystemPrompt(userId, session.getPersonality());
-        messages.add(new SystemMessage(systemPrompt));
+        // 1. 静态 System Prompt（人格设定，内容稳定，便于 prefix cache 命中）
+        String staticPrompt = promptService.buildStaticSystemPrompt(session.getPersonality());
+        messages.add(new SystemMessage(staticPrompt));
 
-        // 2. 最近 10 条历史消息
+        // 2. 动态记忆上下文（跨会话摘要 + 用户画像，每次对话可能变化）
+        //    单独作为第二条 SystemMessage，不污染静态前缀
+        String memoryPrompt = promptService.buildMemorySystemPrompt(userId);
+        if (memoryPrompt != null && !memoryPrompt.isBlank()) {
+            messages.add(new SystemMessage(memoryPrompt));
+        }
+
+        // 3. 最近 10 条历史消息
         List<ChatMessage> history = chatMessageMapper.findRecentMessages(session.getId(), 10);
         for (ChatMessage msg : history) {
             if (RoleEnum.USER.getCode().equals(msg.getRole())) {
@@ -191,7 +206,7 @@ public class ChatService {
             }
         }
 
-        // 3. 当前用户输入
+        // 4. 当前用户输入
         messages.add(new UserMessage(userInput));
 
         return messages;
@@ -310,20 +325,22 @@ public class ChatService {
     }
 
     /**
-     * 删除会话
+     * 删除会话（逻辑删除）
+     * 使用 deleteById 触发 MyBatis Plus @TableLogic 机制，自动将 deleted 置为 1
+     * 注意：不可用 setDeleted(1) + updateById，@TableLogic 字段在 updateById 中会被忽略
      */
     public void deleteSession(Long userId, Long sessionId) {
+        // 先校验归属，防止越权删除
         ChatSession session = chatSessionMapper.selectOne(
                 new LambdaQueryWrapper<ChatSession>()
                         .eq(ChatSession::getId, sessionId)
                         .eq(ChatSession::getUserId, userId)
-                        .eq(ChatSession::getDeleted, 0)
         );
         if (session == null) {
             throw new BusinessException(ResultCode.SESSION_NOT_FOUND);
         }
-        session.setDeleted(1);
-        chatSessionMapper.updateById(session);
+        // deleteById 会执行 UPDATE chat_session SET deleted=1 WHERE id=?
+        chatSessionMapper.deleteById(sessionId);
     }
 }
 

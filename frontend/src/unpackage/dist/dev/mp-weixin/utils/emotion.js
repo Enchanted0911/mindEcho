@@ -22,6 +22,12 @@ function getEmotionInfo(code) {
 function getPersonalityInfo(code) {
   return PERSONALITY_MAP[code] || PERSONALITY_MAP.gentle_sister;
 }
+function parseDate(dateStr) {
+  if (!dateStr)
+    return /* @__PURE__ */ new Date(NaN);
+  return new Date(dateStr.replace(" ", "T"));
+}
 exports.getEmotionInfo = getEmotionInfo;
 exports.getPersonalityInfo = getPersonalityInfo;
+exports.parseDate = parseDate;
 //# sourceMappingURL=../../.sourcemap/mp-weixin/utils/emotion.js.map

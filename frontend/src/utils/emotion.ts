@@ -29,8 +29,18 @@ export function getPersonalityInfo(code: string) {
   return PERSONALITY_MAP[code] || PERSONALITY_MAP.gentle_sister
 }
 
+/**
+ * 跨平台日期解析：将 "yyyy-MM-dd HH:mm:ss" 转为 iOS 兼容的 ISO 8601 格式
+ * iOS Safari 不支持 "yyyy-MM-dd HH:mm:ss"（空格分隔），需替换为 "T" 连接
+ */
+export function parseDate(dateStr: string): Date {
+  if (!dateStr) return new Date(NaN)
+  // "2026-05-28 12:38:30" → "2026-05-28T12:38:30"
+  return new Date(dateStr.replace(' ', 'T'))
+}
+
 export function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
+  const date = parseDate(dateStr)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
 

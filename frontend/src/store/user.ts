@@ -2,7 +2,7 @@ import {defineStore} from 'pinia'
 import {computed, ref} from 'vue'
 
 export interface UserInfo {
-  id: number
+  id: string   // 后端 Long 序列化为字符串，防止 JS 精度丢失
   nickname: string
   avatar: string | null
   isVip: boolean

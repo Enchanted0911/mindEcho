@@ -40,6 +40,11 @@ spring:
           model: deepseek-chat
           temperature: 0.8
           max-tokens: 2048
+          # DeepSeek Prompt Cache（前缀缓存）
+          # DeepSeek 服务端自动对 ≥64 tokens 的公共前缀进行缓存，命中时 token 费用降低 90%
+          # 该字段触发 cache_control 上报，响应中 usage.prompt_cache_hit_tokens 可观察命中情况
+          additionalOptions:
+            prefix_caching_enabled: true
       embedding:
         options:
           model: text-embedding-3-small

@@ -55,6 +55,10 @@ function get(url, data) {
 function post(url, data) {
   return request({ url, method: "POST", data });
 }
+function del(url) {
+  return request({ url, method: "DELETE" });
+}
+exports.del = del;
 exports.get = get;
 exports.post = post;
 //# sourceMappingURL=../../.sourcemap/mp-weixin/utils/request.js.map

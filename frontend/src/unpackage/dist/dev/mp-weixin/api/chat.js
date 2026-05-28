@@ -1,8 +1,14 @@
 "use strict";
 const common_vendor = require("../common/vendor.js");
 const utils_request = require("../utils/request.js");
+function getSessionList(page = 1, size = 20) {
+  return utils_request.get(`/chat/sessions?page=${page}&size=${size}`);
+}
 function getMessageList(sessionId) {
   return utils_request.get(`/chat/sessions/${sessionId}/messages`);
+}
+function deleteSession(sessionId) {
+  return utils_request.del(`/chat/sessions/${sessionId}`);
 }
 function createSseConnection(sessionId, message, onChunk, onDone, onError) {
   const token = common_vendor.index.getStorageSync("token");
@@ -50,5 +56,7 @@ function createSseConnection(sessionId, message, onChunk, onDone, onError) {
   });
 }
 exports.createSseConnection = createSseConnection;
+exports.deleteSession = deleteSession;
 exports.getMessageList = getMessageList;
+exports.getSessionList = getSessionList;
 //# sourceMappingURL=../../.sourcemap/mp-weixin/api/chat.js.map
