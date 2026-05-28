@@ -15,7 +15,7 @@ public class ChatSessionDTO {
 
     private Long id;
     private String title;
-    private String personality;
+    private String aiPersonality;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdTime;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

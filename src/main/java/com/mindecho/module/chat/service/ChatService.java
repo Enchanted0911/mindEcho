@@ -3,7 +3,6 @@ package com.mindecho.module.chat.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.mindecho.common.enums.PersonalityEnum;
 import com.mindecho.common.enums.RiskLevelEnum;
 import com.mindecho.common.enums.RoleEnum;
 import com.mindecho.common.exception.BusinessException;
@@ -19,6 +18,7 @@ import com.mindecho.module.chat.mapper.ChatMessageMapper;
 import com.mindecho.module.chat.mapper.ChatSessionMapper;
 import com.mindecho.module.emotion.service.EmotionService;
 import com.mindecho.module.memory.service.MemoryService;
+import com.mindecho.module.personality.service.PersonalityService;
 import com.mindecho.module.prompt.service.PromptService;
 import com.mindecho.module.risk.service.RiskService;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +53,7 @@ public class ChatService {
     private final RiskService riskService;
     private final EmotionService emotionService;
     private final MemoryService memoryService;
+    private final PersonalityService personalityService;
 
     @Value("${mindecho.free-daily-messages:10}")
     private Integer freeDailyMessages;
@@ -77,7 +78,7 @@ public class ChatService {
         }
 
         // 4. 获取或创建会话
-        ChatSession session = getOrCreateSession(userId, request.getSessionId(), user.getPersonality());
+        ChatSession session = getOrCreateSession(userId, request.getSessionId(), user.getAiPersonality());
 
         // 5. 保存用户消息
         ChatMessage userMsg = saveMessage(session.getId(), userId, RoleEnum.USER.getCode(),
@@ -186,7 +187,7 @@ public class ChatService {
         List<Message> messages = new ArrayList<>();
 
         // 1. 静态 System Prompt（人格设定，内容稳定，便于 prefix cache 命中）
-        String staticPrompt = promptService.buildStaticSystemPrompt(session.getPersonality());
+        String staticPrompt = promptService.buildStaticSystemPrompt(session.getAiPersonality());
         messages.add(new SystemMessage(staticPrompt));
 
         // 2. 动态记忆上下文（跨会话摘要 + 用户画像，每次对话可能变化）
@@ -233,7 +234,7 @@ public class ChatService {
         ChatSession session = new ChatSession();
         session.setUserId(userId);
         session.setTitle("新对话");
-        session.setPersonality(personality != null ? personality : PersonalityEnum.GENTLE_SISTER.getCode());
+        session.setAiPersonality(personality != null ? personality : personalityService.getDefaultCode());
         chatSessionMapper.insert(session);
         return session;
     }
@@ -290,7 +291,7 @@ public class ChatService {
         return sessionPage.convert(session -> ChatSessionDTO.builder()
                 .id(session.getId())
                 .title(session.getTitle())
-                .personality(session.getPersonality())
+                .aiPersonality(session.getAiPersonality())
                 .createdTime(session.getCreatedTime())
                 .updatedTime(session.getUpdatedTime())
                 .build());

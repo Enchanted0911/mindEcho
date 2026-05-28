@@ -24,7 +24,7 @@ public class LoginResponse {
         private String avatar;
         private Boolean isVip;
         private String vipExpireTime;
-        private String personality;
+        private String aiPersonality;
     }
 }
 

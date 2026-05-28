@@ -14,7 +14,7 @@ export interface ChatMessage {
 export interface ChatSession {
   id: string   // 后端 Long 序列化为字符串，防止 JS 精度丢失
   title: string
-  personality: string
+  aiPersonality: string
   createdTime: string
   updatedTime: string
 }

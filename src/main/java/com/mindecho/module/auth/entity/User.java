@@ -32,8 +32,8 @@ public class User {
     private LocalDateTime vipExpireTime;
 
     /** 当前使用的 AI 人格 */
-    @TableField("personality")
-    private String personality;
+    @TableField("ai_personality")
+    private String aiPersonality;
 
     /** 逻辑删除 */
     @TableLogic

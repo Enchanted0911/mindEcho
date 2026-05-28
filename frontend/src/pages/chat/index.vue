@@ -3,7 +3,8 @@ import {computed, nextTick, onMounted, ref} from 'vue'
 import {useChatStore} from '../../store/chat'
 import {useUserStore} from '../../store/user'
 import {createSseConnection, deleteSession, getMessageList, getSessionList} from '../../api/chat'
-import {getPersonalityInfo, parseDate} from '../../utils/emotion'
+import {getPersonalityList, type Personality} from '../../api/personality'
+import {parseDate} from '../../utils/emotion'
 
 const chatStore = useChatStore()
 const userStore = useUserStore()
@@ -15,17 +16,38 @@ const showPersonalityPicker = ref(false)
 const isComposing = ref(false)
 const isLoadingSessions = ref(false)
 
-const personality = computed(() => getPersonalityInfo(userStore.currentPersonality))
+// 人格列表（从接口动态加载）
+const personalities = ref<Personality[]>([])
+
+// 当前人格信息（从列表中查找，兜底显示默认值）
+const personality = computed(() => {
+  const found = personalities.value.find(p => p.code === userStore.currentPersonality)
+  return found || { code: userStore.currentPersonality, name: '心屿', emoji: '🌸', description: '', gender: 'female', style: 'gentle' }
+})
+
+// 按性别分组
+const femalePersonalities = computed(() => personalities.value.filter(p => p.gender === 'female'))
+const malePersonalities = computed(() => personalities.value.filter(p => p.gender === 'male'))
+
 const messages = computed(() => chatStore.messages)
 const isStreaming = computed(() => chatStore.isStreaming)
 const sessions = computed(() => chatStore.sessions)
 
 onMounted(() => {
+  loadPersonalities()
   loadSessions()
   if (chatStore.currentSessionId) {
     loadHistory()
   }
 })
+
+async function loadPersonalities() {
+  try {
+    personalities.value = await getPersonalityList()
+  } catch (e) {
+    console.error('Load personalities failed:', e)
+  }
+}
 
 async function loadSessions() {
   isLoadingSessions.value = true
@@ -164,19 +186,13 @@ function startNewChat() {
   loadSessions()
 }
 
-const PERSONALITIES = [
-  { code: 'gentle_sister', label: '温柔姐姐', emoji: '🌸', desc: '温柔陪伴' },
-  { code: 'rational_mentor', label: '理性导师', emoji: '🎯', desc: '冷静分析' },
-  { code: 'snarky_friend', label: '毒舌朋友', emoji: '😏', desc: '搞笑吐槽' },
-  { code: 'midnight_hollow', label: '深夜树洞', emoji: '🌙', desc: '安静倾听' }
-]
-
 async function selectPersonality(code: string) {
   userStore.updatePersonality(code)
   showPersonalityPicker.value = false
   startNewChat()
+  const found = personalities.value.find(p => p.code === code)
   uni.showToast({
-    title: `已切换到${PERSONALITIES.find(p => p.code === code)?.label}`,
+    title: `已切换到 ${found?.name ?? '心屿'}`,
     icon: 'none'
   })
 }
@@ -322,19 +338,56 @@ async function selectPersonality(code: string) {
     <!-- 人格选择器弹窗 -->
     <view v-if="showPersonalityPicker" class="modal-overlay" @click="showPersonalityPicker = false">
       <view class="personality-picker" @click.stop>
-        <text class="picker-title">选择 AI 人格</text>
-        <view class="personality-grid">
-          <view
-            v-for="p in PERSONALITIES"
-            :key="p.code"
-            class="personality-card"
-            :class="{ 'personality-active': userStore.currentPersonality === p.code }"
-            @click="selectPersonality(p.code)"
-          >
-            <text class="p-emoji">{{ p.emoji }}</text>
-            <text class="p-name">{{ p.label }}</text>
-            <text class="p-desc">{{ p.desc }}</text>
+        <view class="picker-header">
+          <text class="picker-title">选择你的 AI 伴侣</text>
+          <text class="picker-close" @click="showPersonalityPicker = false">✕</text>
+        </view>
+
+        <!-- 女性人格 -->
+        <view v-if="femalePersonalities.length > 0" class="gender-group">
+          <view class="gender-label">
+            <text class="gender-icon">♀</text>
+            <text class="gender-text">女性角色</text>
           </view>
+          <view class="personality-grid">
+            <view
+              v-for="p in femalePersonalities"
+              :key="p.code"
+              class="personality-card"
+              :class="{ 'personality-active': userStore.currentPersonality === p.code }"
+              @click="selectPersonality(p.code)"
+            >
+              <text class="p-emoji">{{ p.emoji }}</text>
+              <text class="p-name">{{ p.name }}</text>
+              <text class="p-desc">{{ p.description }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 男性人格 -->
+        <view v-if="malePersonalities.length > 0" class="gender-group">
+          <view class="gender-label">
+            <text class="gender-icon">♂</text>
+            <text class="gender-text">男性角色</text>
+          </view>
+          <view class="personality-grid">
+            <view
+              v-for="p in malePersonalities"
+              :key="p.code"
+              class="personality-card"
+              :class="{ 'personality-active': userStore.currentPersonality === p.code }"
+              @click="selectPersonality(p.code)"
+            >
+              <text class="p-emoji">{{ p.emoji }}</text>
+              <text class="p-name">{{ p.name }}</text>
+              <text class="p-desc">{{ p.description }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 加载中 -->
+        <view v-if="personalities.length === 0" class="picker-loading">
+          <text>加载中...</text>
         </view>
       </view>
     </view>
@@ -696,16 +749,58 @@ async function selectPersonality(code: string) {
   border-top-right-radius: 40rpx;
   padding: 40rpx 32rpx 80rpx;
   width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
   border: 1rpx solid rgba(184, 158, 232, 0.15);
+}
+
+.picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 40rpx;
 }
 
 .picker-title {
   font-size: 34rpx;
   color: #e8d5ff;
   font-weight: 600;
+}
+
+.picker-close {
+  font-size: 32rpx;
+  color: #7a6b9a;
+  padding: 8rpx;
+}
+
+.gender-group {
+  margin-bottom: 32rpx;
+}
+
+.gender-label {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.gender-icon {
+  font-size: 28rpx;
+  color: #b89ee8;
+}
+
+.gender-text {
+  font-size: 26rpx;
+  color: #7a6b9a;
+  font-weight: 500;
+  letter-spacing: 2rpx;
+}
+
+.picker-loading {
   text-align: center;
-  display: block;
-  margin-bottom: 40rpx;
+  color: #5a5070;
+  font-size: 28rpx;
+  padding: 60rpx 0;
 }
 
 .personality-grid {

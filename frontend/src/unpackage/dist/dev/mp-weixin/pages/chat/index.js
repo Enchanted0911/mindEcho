@@ -3,6 +3,7 @@ const common_vendor = require("../../common/vendor.js");
 const store_chat = require("../../store/chat.js");
 const store_user = require("../../store/user.js");
 const api_chat = require("../../api/chat.js");
+const api_personality = require("../../api/personality.js");
 const utils_emotion = require("../../utils/emotion.js");
 const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
   __name: "index",
@@ -15,23 +16,37 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     const showPersonalityPicker = common_vendor.ref(false);
     common_vendor.ref(false);
     const isLoadingSessions = common_vendor.ref(false);
-    const personality = common_vendor.computed(() => utils_emotion.getPersonalityInfo(userStore.currentPersonality));
+    const personalities = common_vendor.ref([]);
+    const personality = common_vendor.computed(() => {
+      const found = personalities.value.find((p) => p.code === userStore.currentPersonality);
+      return found || { code: userStore.currentPersonality, name: "心屿", emoji: "🌸", description: "", gender: "female", style: "gentle" };
+    });
+    const femalePersonalities = common_vendor.computed(() => personalities.value.filter((p) => p.gender === "female"));
+    const malePersonalities = common_vendor.computed(() => personalities.value.filter((p) => p.gender === "male"));
     const messages = common_vendor.computed(() => chatStore.messages);
     const isStreaming = common_vendor.computed(() => chatStore.isStreaming);
     const sessions = common_vendor.computed(() => chatStore.sessions);
     common_vendor.onMounted(() => {
+      loadPersonalities();
       loadSessions();
       if (chatStore.currentSessionId) {
         loadHistory();
       }
     });
+    async function loadPersonalities() {
+      try {
+        personalities.value = await api_personality.getPersonalityList();
+      } catch (e) {
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:48", "Load personalities failed:", e);
+      }
+    }
     async function loadSessions() {
       isLoadingSessions.value = true;
       try {
         const result = await api_chat.getSessionList();
         chatStore.setSessions(result.records || []);
       } catch (e) {
-        common_vendor.index.__f__("error", "at pages/chat/index.vue:36", "Load sessions failed:", e);
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:58", "Load sessions failed:", e);
       } finally {
         isLoadingSessions.value = false;
       }
@@ -54,7 +69,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         });
         scrollToMsg();
       } catch (e) {
-        common_vendor.index.__f__("error", "at pages/chat/index.vue:60", "Switch session failed:", e);
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:82", "Switch session failed:", e);
       }
     }
     async function removeSession(sessionId) {
@@ -93,7 +108,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         });
         scrollToMsg();
       } catch (e) {
-        common_vendor.index.__f__("error", "at pages/chat/index.vue:102", "Load history failed:", e);
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:124", "Load history failed:", e);
       }
     }
     async function sendMessage() {
@@ -130,7 +145,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           scrollToMsg();
         },
         (err) => {
-          common_vendor.index.__f__("error", "at pages/chat/index.vue:146", "SSE error:", err);
+          common_vendor.index.__f__("error", "at pages/chat/index.vue:168", "SSE error:", err);
           chatStore.finishStreaming(aiMsgId);
           common_vendor.index.showToast({ title: "AI 回复失败，请重试", icon: "none" });
         }
@@ -147,19 +162,13 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       showSessionPanel.value = false;
       loadSessions();
     }
-    const PERSONALITIES = [
-      { code: "gentle_sister", label: "温柔姐姐", emoji: "🌸", desc: "温柔陪伴" },
-      { code: "rational_mentor", label: "理性导师", emoji: "🎯", desc: "冷静分析" },
-      { code: "snarky_friend", label: "毒舌朋友", emoji: "😏", desc: "搞笑吐槽" },
-      { code: "midnight_hollow", label: "深夜树洞", emoji: "🌙", desc: "安静倾听" }
-    ];
     async function selectPersonality(code) {
-      var _a;
       userStore.updatePersonality(code);
       showPersonalityPicker.value = false;
       startNewChat();
+      const found = personalities.value.find((p) => p.code === code);
       common_vendor.index.showToast({
-        title: `已切换到${(_a = PERSONALITIES.find((p) => p.code === code)) == null ? void 0 : _a.label}`,
+        title: `已切换到 ${(found == null ? void 0 : found.name) ?? "心屿"}`,
         icon: "none"
       });
     }
@@ -232,21 +241,40 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         B: common_vendor.o(($event) => showSessionPanel.value = false, "18")
       }) : {}, {
         C: showPersonalityPicker.value
-      }, showPersonalityPicker.value ? {
-        D: common_vendor.f(PERSONALITIES, (p, k0, i0) => {
+      }, showPersonalityPicker.value ? common_vendor.e({
+        D: common_vendor.o(($event) => showPersonalityPicker.value = false, "a9"),
+        E: femalePersonalities.value.length > 0
+      }, femalePersonalities.value.length > 0 ? {
+        F: common_vendor.f(femalePersonalities.value, (p, k0, i0) => {
           return {
             a: common_vendor.t(p.emoji),
-            b: common_vendor.t(p.label),
-            c: common_vendor.t(p.desc),
+            b: common_vendor.t(p.name),
+            c: common_vendor.t(p.description),
             d: p.code,
             e: common_vendor.unref(userStore).currentPersonality === p.code ? 1 : "",
             f: common_vendor.o(($event) => selectPersonality(p.code), p.code)
           };
-        }),
-        E: common_vendor.o(() => {
+        })
+      } : {}, {
+        G: malePersonalities.value.length > 0
+      }, malePersonalities.value.length > 0 ? {
+        H: common_vendor.f(malePersonalities.value, (p, k0, i0) => {
+          return {
+            a: common_vendor.t(p.emoji),
+            b: common_vendor.t(p.name),
+            c: common_vendor.t(p.description),
+            d: p.code,
+            e: common_vendor.unref(userStore).currentPersonality === p.code ? 1 : "",
+            f: common_vendor.o(($event) => selectPersonality(p.code), p.code)
+          };
+        })
+      } : {}, {
+        I: personalities.value.length === 0
+      }, personalities.value.length === 0 ? {} : {}, {
+        J: common_vendor.o(() => {
         }, "86"),
-        F: common_vendor.o(($event) => showPersonalityPicker.value = false, "92")
-      } : {});
+        K: common_vendor.o(($event) => showPersonalityPicker.value = false, "92")
+      }) : {});
     };
   }
 });

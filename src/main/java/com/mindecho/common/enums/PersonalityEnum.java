@@ -4,7 +4,12 @@ import lombok.Getter;
 
 /**
  * AI 人格枚举
+ *
+ * @deprecated 已迁移到 {@code ai_personality} 数据库表，通过 {@code PersonalityService} 动态加载。
+ *             所有业务代码应改用 {@code PersonalityService.getByCode()} / {@code PersonalityService.getDefaultCode()}。
+ *             该枚举保留仅供历史参考，后续版本将删除。
  */
+@Deprecated(since = "2.0", forRemoval = true)
 @Getter
 public enum PersonalityEnum {
 

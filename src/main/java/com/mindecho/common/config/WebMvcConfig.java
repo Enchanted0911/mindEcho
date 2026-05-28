@@ -41,6 +41,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/**")
                 .excludePathPatterns(
                         "/auth/wx-login",
+                        "/personality/list",
                         "/actuator/**"
                 );
     }

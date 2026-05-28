@@ -10,7 +10,7 @@ const useUserStore = common_vendor.defineStore("user", () => {
   });
   const currentPersonality = common_vendor.computed(() => {
     var _a;
-    return ((_a = userInfo.value) == null ? void 0 : _a.personality) ?? "gentle_sister";
+    return ((_a = userInfo.value) == null ? void 0 : _a.aiPersonality) ?? "gentle_female";
   });
   function setToken(newToken) {
     token.value = newToken;
@@ -27,9 +27,9 @@ const useUserStore = common_vendor.defineStore("user", () => {
     common_vendor.index.removeStorageSync("userInfo");
     common_vendor.index.reLaunch({ url: "/pages/login/index" });
   }
-  function updatePersonality(personality) {
+  function updatePersonality(aiPersonality) {
     if (userInfo.value) {
-      userInfo.value.personality = personality;
+      userInfo.value.aiPersonality = aiPersonality;
       common_vendor.index.setStorageSync("userInfo", JSON.stringify(userInfo.value));
     }
   }

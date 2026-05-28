@@ -15,18 +15,27 @@ export const EMOTION_MAP: Record<string, { label: string; emoji: string; color: 
 }
 
 export const PERSONALITY_MAP: Record<string, { label: string; desc: string; emoji: string }> = {
-  gentle_sister: { label: '温柔姐姐', desc: '温柔陪伴，细腻共情', emoji: '🌸' },
-  rational_mentor: { label: '理性导师', desc: '冷静分析，引导成长', emoji: '🎯' },
-  snarky_friend: { label: '毒舌朋友', desc: '搞笑吐槽，化解压力', emoji: '😏' },
-  midnight_hollow: { label: '深夜树洞', desc: '安静倾听，深夜陪伴', emoji: '🌙' }
+  // 新版：4 种风格 × 男女各一
+  gentle_female:   { label: '小柔', desc: '温柔陪伴，细腻共情', emoji: '🌸' },
+  gentle_male:     { label: '阿暖', desc: '温暖守护，踏实陪伴', emoji: '☀️' },
+  rational_female: { label: '知微', desc: '冷静分析，清醒引导', emoji: '🎯' },
+  rational_male:   { label: '林析', desc: '逻辑清晰，引导成长', emoji: '📐' },
+  snarky_female:   { label: '辣辣', desc: '毒嘴心软，笑中化解', emoji: '😏' },
+  snarky_male:     { label: '损哥', desc: '损嘴暖心，搞笑减压', emoji: '😤' },
+  midnight_female: { label: '夜笙', desc: '深夜守候，静静陪伴', emoji: '🌙' },
+  midnight_male:   { label: '深渊', desc: '沉默守护，深夜同行', emoji: '🌊' },
 }
 
 export function getEmotionInfo(code: string) {
   return EMOTION_MAP[code] || EMOTION_MAP.neutral
 }
 
-export function getPersonalityInfo(code: string) {
-  return PERSONALITY_MAP[code] || PERSONALITY_MAP.gentle_sister
+/**
+ * 根据 code 获取人格展示信息，找不到时返回通用兜底（展示 code 本身）
+ * 推荐：有接口数据时直接用接口字段，此函数作为离线/历史兼容兜底
+ */
+export function getPersonalityInfo(code: string): { label: string; desc: string; emoji: string } {
+  return PERSONALITY_MAP[code] || { label: code, desc: '', emoji: '🤖' }
 }
 
 /**

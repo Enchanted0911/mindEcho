@@ -3,7 +3,6 @@ package com.mindecho.module.auth.service;
 import cn.hutool.http.HttpUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
-import com.mindecho.common.enums.PersonalityEnum;
 import com.mindecho.common.exception.BusinessException;
 import com.mindecho.common.result.ResultCode;
 import com.mindecho.common.util.JwtUtil;
@@ -11,6 +10,7 @@ import com.mindecho.module.auth.dto.LoginResponse;
 import com.mindecho.module.auth.dto.WxLoginRequest;
 import com.mindecho.module.auth.entity.User;
 import com.mindecho.module.auth.mapper.UserMapper;
+import com.mindecho.module.personality.service.PersonalityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +28,7 @@ public class AuthService {
 
     private final UserMapper userMapper;
     private final JwtUtil jwtUtil;
+    private final PersonalityService personalityService;
 
     @Value("${wechat.appid}")
     private String appid;
@@ -90,7 +91,7 @@ public class AuthService {
         User user = new User();
         user.setOpenid(openid);
         user.setNickname("用户" + openid.substring(openid.length() - 4));
-        user.setPersonality(PersonalityEnum.GENTLE_SISTER.getCode());
+        user.setAiPersonality(personalityService.getDefaultCode());
         userMapper.insert(user);
         log.info("New user created: openid={}", openid);
         return user;
@@ -105,7 +106,7 @@ public class AuthService {
                 .nickname(user.getNickname())
                 .avatar(user.getAvatar())
                 .isVip(user.isVip())
-                .personality(user.getPersonality())
+                .aiPersonality(user.getAiPersonality())
                 .vipExpireTime(user.getVipExpireTime() != null
                         ? user.getVipExpireTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
                         : null)

@@ -1,8 +1,9 @@
 package com.mindecho.module.prompt.service;
 
-import com.mindecho.common.enums.PersonalityEnum;
 import com.mindecho.module.memory.entity.Memory;
 import com.mindecho.module.memory.mapper.MemoryMapper;
+import com.mindecho.module.personality.entity.AiPersonality;
+import com.mindecho.module.personality.service.PersonalityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ import java.util.stream.Collectors;
 /**
  * Prompt 构建服务
  * 负责组装 System Prompt（人格 + 用户画像 + 长期记忆摘要）
+ * 人格信息从数据库动态加载，支持运营动态配置
  */
 @Slf4j
 @Service
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
 public class PromptService {
 
     private final MemoryMapper memoryMapper;
+    private final PersonalityService personalityService;
 
     /**
      * 静态基础 Prompt 模板（按人格变化，但同一用户/人格不变）
@@ -53,9 +56,10 @@ public class PromptService {
     /**
      * 构建静态 System Prompt（人格设定，内容稳定，便于 DeepSeek prefix cache 缓存）
      * 应作为第一条 SystemMessage 发送，内容在同一人格下不会变化
+     * 人格信息从数据库动态加载
      */
     public String buildStaticSystemPrompt(String personalityCode) {
-        PersonalityEnum personality = PersonalityEnum.fromCode(personalityCode);
+        AiPersonality personality = personalityService.getByCode(personalityCode);
         return String.format(STATIC_SYSTEM_PROMPT,
                 personality.getName(),
                 personality.getSystemPrompt());
@@ -68,16 +72,6 @@ public class PromptService {
      */
     public String buildMemorySystemPrompt(Long userId) {
         return buildMemoryContext(userId);
-    }
-
-    /**
-     * @deprecated 使用 buildStaticSystemPrompt + buildMemorySystemPrompt 替代，以优化缓存命中率
-     */
-    @Deprecated
-    public String buildSystemPrompt(Long userId, String personalityCode) {
-        String memory = buildMemoryContext(userId);
-        return buildStaticSystemPrompt(personalityCode)
-                + (memory.isEmpty() ? "" : "\n" + memory);
     }
 
     /**

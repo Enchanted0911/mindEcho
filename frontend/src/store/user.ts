@@ -7,7 +7,7 @@ export interface UserInfo {
   avatar: string | null
   isVip: boolean
   vipExpireTime: string | null
-  personality: string
+  aiPersonality: string
 }
 
 export const useUserStore = defineStore('user', () => {
@@ -16,7 +16,7 @@ export const useUserStore = defineStore('user', () => {
 
   const isLoggedIn = computed(() => !!token.value)
   const isVip = computed(() => userInfo.value?.isVip ?? false)
-  const currentPersonality = computed(() => userInfo.value?.personality ?? 'gentle_sister')
+  const currentPersonality = computed(() => userInfo.value?.aiPersonality ?? 'gentle_female')
 
   function setToken(newToken: string) {
     token.value = newToken
@@ -36,9 +36,9 @@ export const useUserStore = defineStore('user', () => {
     uni.reLaunch({ url: '/pages/login/index' })
   }
 
-  function updatePersonality(personality: string) {
+  function updatePersonality(aiPersonality: string) {
     if (userInfo.value) {
-      userInfo.value.personality = personality
+      userInfo.value.aiPersonality = aiPersonality
       uni.setStorageSync('userInfo', JSON.stringify(userInfo.value))
     }
   }

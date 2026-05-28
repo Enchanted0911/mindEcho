@@ -8,7 +8,7 @@ export interface WxLoginResponse {
     avatar: string | null
     isVip: boolean
     vipExpireTime: string | null
-    personality: string
+    aiPersonality: string
   }
 }
 
