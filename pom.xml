@@ -24,7 +24,6 @@
         <spring-ai.version>1.0.0-M1</spring-ai.version>
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
         <jjwt.version>0.12.5</jjwt.version>
-        <milvus.version>2.3.7</milvus.version>
         <hutool.version>5.8.27</hutool.version>
         <redisson.version>3.28.0</redisson.version>
     </properties>
@@ -87,12 +86,6 @@
             <version>${redisson.version}</version>
         </dependency>
 
-        <!-- Milvus Java SDK -->
-        <dependency>
-            <groupId>io.milvus</groupId>
-            <artifactId>milvus-sdk-java</artifactId>
-            <version>${milvus.version}</version>
-        </dependency>
 
         <!-- JWT -->
         <dependency>
@@ -145,6 +138,10 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
 
         <!-- Test -->
         <dependency>
@@ -167,6 +164,21 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>${java.version}</release>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.36</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

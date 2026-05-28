@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 
 /**
  * Prompt 构建服务
- * 负责组装 System Prompt（人格 + 用户画像 + 长期记忆）
+ * 负责组装 System Prompt（人格 + 用户画像 + 长期记忆摘要）
  */
 @Slf4j
 @Service
@@ -45,7 +45,6 @@ public class PromptService {
             - 可以适当使用 emoji 增加温度感
 
             %s
-
             %s
             """;
 
@@ -54,8 +53,6 @@ public class PromptService {
      */
     public String buildSystemPrompt(Long userId, String personalityCode) {
         PersonalityEnum personality = PersonalityEnum.fromCode(personalityCode);
-
-        // 获取用户记忆
         String memoryContext = buildMemoryContext(userId);
 
         return String.format(BASE_SYSTEM_PROMPT,
@@ -65,7 +62,8 @@ public class PromptService {
     }
 
     /**
-     * 构建记忆上下文
+     * 构建记忆上下文：
+     * 优先展示 AI 生成的跨会话摘要（summary），其次展示用户画像（profile）
      */
     private String buildMemoryContext(Long userId) {
         List<Memory> memories = memoryMapper.findByUserId(userId);
@@ -73,34 +71,34 @@ public class PromptService {
             return "";
         }
 
-        // 用户画像记忆
-        List<Memory> profileMemories = memories.stream()
-                .filter(m -> "profile".equals(m.getMemoryType()))
-                .collect(Collectors.toList());
+        StringBuilder sb = new StringBuilder("\n【关于这位用户，你了解的信息】\n");
+        boolean hasContent = false;
 
-        // 事件记忆
-        List<Memory> eventMemories = memories.stream()
-                .filter(m -> "event".equals(m.getMemoryType()))
+        // 1. 跨会话摘要（最重要，展示最新一条）
+        memories.stream()
+                .filter(m -> "summary".equals(m.getMemoryType()))
+                .findFirst()
+                .ifPresent(m -> {
+                    sb.append("历史对话摘要：").append(m.getContent()).append("\n");
+                });
+
+        // 2. 用户画像（去重展示，最多 5 条）
+        List<Memory> profiles = memories.stream()
+                .filter(m -> "profile".equals(m.getMemoryType()))
                 .limit(5)
                 .collect(Collectors.toList());
-
-        StringBuilder sb = new StringBuilder();
-
-        if (!profileMemories.isEmpty()) {
-            sb.append("【用户画像】\n");
-            profileMemories.forEach(m -> sb.append("- ").append(m.getContent()).append("\n"));
+        if (!profiles.isEmpty()) {
+            sb.append("\n用户画像：\n");
+            profiles.forEach(m -> sb.append("- ").append(m.getContent()).append("\n"));
+            hasContent = true;
         }
 
-        if (!eventMemories.isEmpty()) {
-            sb.append("\n【用户近期经历】\n");
-            eventMemories.forEach(m -> sb.append("- ").append(m.getContent()).append("\n"));
+        // 判断是否有任何内容（summary 或 profile）
+        if (!hasContent && memories.stream().noneMatch(m -> "summary".equals(m.getMemoryType()))) {
+            return "";
         }
 
-        if (sb.length() > 0) {
-            return "\n【关于这位用户，你了解的信息】\n" + sb;
-        }
-
-        return "";
+        return sb.toString();
     }
 }
 

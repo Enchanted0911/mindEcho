@@ -27,7 +27,6 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
       database: 0
       timeout: 3000ms
 
@@ -44,6 +43,15 @@ spring:
       embedding:
         options:
           model: text-embedding-3-small
+
+  # Jackson 日期格式配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
 
   # 文件上传
   servlet:
@@ -65,15 +73,6 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-# Milvus 配置（留空）
-milvus:
-  host: ${MILVUS_HOST:localhost}
-  port: ${MILVUS_PORT:19530}
-  username: ${MILVUS_USERNAME:}
-  password: ${MILVUS_PASSWORD:}
-  collection:
-    name: mind_echo_memory
-    dimension: 1536
 
 # 微信小程序配置（留空）
 wechat:
@@ -89,27 +88,12 @@ jwt:
 # 应用自定义配置
 mindecho:
   risk:
-    high-risk-keywords:
-      - 自杀
-      - 轻生
-      - 割腕
-      - 跳楼
-      - 活着没意义
-      - 不想活了
-      - 去死
-      - 结束生命
-      - 自残
-    medium-risk-keywords:
-      - 活不下去
-      - 太痛苦了
-      - 撑不住了
-      - 绝望
-      - 没有希望
+    high-risk-keywords: 自杀,轻生,割腕,跳楼,活着没意义,不想活了,去死,结束生命,自残
+    medium-risk-keywords: 活不下去,太痛苦了,撑不住了,绝望,没有希望
   safety-hotline: "北京心理危机研究与干预中心：010-82951332；全国心理援助热线：400-161-9995"
   free-daily-messages: 10
-  embedding:
-    dimension: 1536
-    top-k: 5
+  memory:
+    summary-threshold: 6  # 每累积 N 轮对话触发一次 AI 摘要压缩
 
 # 日志配置
 logging:

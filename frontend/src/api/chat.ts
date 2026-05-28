@@ -39,8 +39,8 @@ export function deleteSession(sessionId: number): Promise<void> {
 }
 
 /**
- * 发送消息（SSE 流式，返回 EventSource）
- * 微信小程序没有 EventSource，使用 uni.request 分块读取
+ * 发送消息（SSE 流式）
+ * 微信小程序使用 RequestTask.onChunkReceived 接收分块数据
  */
 export function createSseConnection(
   sessionId: number | null,
@@ -52,8 +52,8 @@ export function createSseConnection(
   const token = uni.getStorageSync('token')
   const baseUrl = 'http://localhost:8080/api'
 
-  // 微信小程序使用 uni.request 模拟 SSE
-  uni.request({
+  // uni.request 返回 RequestTask，通过它注册 onChunkReceived
+  const requestTask = uni.request({
     url: `${baseUrl}/chat/send`,
     method: 'POST',
     data: { sessionId, message },
@@ -62,7 +62,8 @@ export function createSseConnection(
       'Authorization': `Bearer ${token}`,
       'Accept': 'text/event-stream'
     },
-    enableChunked: true,  // 开启流式接收
+    enableChunked: true,
+    responseType: 'arraybuffer',
     success: () => {
       onDone()
     },
@@ -71,27 +72,30 @@ export function createSseConnection(
     }
   })
 
-  // 监听分块数据
-  // @ts-ignore
-  uni.onChunkReceived((response: any) => {
-    const decoder = new TextDecoder('utf-8')
-    const text = decoder.decode(response.data)
+  // 通过 RequestTask 实例监听分块数据
+  requestTask.onChunkReceived((response: any) => {
+    try {
+      const decoder = new TextDecoder('utf-8')
+      const text = decoder.decode(response.data)
 
-    // 解析 SSE 格式
-    const lines = text.split('\n')
-    for (const line of lines) {
-      if (line.startsWith('data:')) {
-        const data = line.slice(5).trim()
-        if (data === '[DONE]') {
+      // 解析 SSE 格式：每行可能是 "data: xxx" 或 "event:done"
+      const lines = text.split('\n')
+      for (const line of lines) {
+        if (line.startsWith('data:')) {
+          const data = line.slice(5).trim()
+          if (data === '[DONE]') {
+            onDone()
+            return
+          }
+          if (data) {
+            onChunk(data)
+          }
+        } else if (line.startsWith('event:done') || line.includes('[DONE]')) {
           onDone()
-          return
         }
-        if (data) {
-          onChunk(data)
-        }
-      } else if (line.startsWith('event:done')) {
-        onDone()
       }
+    } catch (e) {
+      console.error('Chunk parse error:', e)
     }
   })
 }

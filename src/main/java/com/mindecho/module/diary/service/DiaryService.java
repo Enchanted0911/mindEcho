@@ -87,7 +87,8 @@ public class DiaryService {
                     entry.getEmotion() != null ? entry.getEmotion() : "未记录",
                     entry.getContent() != null ? entry.getContent() : "无内容");
 
-            String summary = chatClient.prompt(prompt)
+            String summary = chatClient.prompt()
+                    .user(prompt)
                     .call()
                     .content();
 
@@ -120,7 +121,7 @@ public class DiaryService {
     private DiaryEntryDTO convertToDTO(DiaryEntry entry) {
         return DiaryEntryDTO.builder()
                 .id(entry.getId())
-                .diaryDate(entry.getDiaryDate())
+                .diaryDate(entry.getDiaryDate() != null ? entry.getDiaryDate().toString() : null)
                 .emotion(entry.getEmotion())
                 .emotionIntensity(entry.getEmotionIntensity())
                 .content(entry.getContent())

@@ -98,9 +98,20 @@ async function fetchAiSummary() {
   }
 }
 
-function formatDate(dateStr: string) {
-  const parts = dateStr.split('-')
-  return `${parts[1]}月${parts[2]}日`
+function formatDate(dateVal: any) {
+  // 兼容两种格式：
+  // 1. 字符串 "2026-05-28"（Jackson 配置 write-dates-as-timestamps: false 后的格式）
+  // 2. 数组 [2026, 5, 28]（Jackson 默认的 LocalDate 序列化格式）
+  if (Array.isArray(dateVal)) {
+    const month = String(dateVal[1]).padStart(2, '0')
+    const day = String(dateVal[2]).padStart(2, '0')
+    return `${month}月${day}日`
+  }
+  if (typeof dateVal === 'string' && dateVal.includes('-')) {
+    const parts = dateVal.split('-')
+    return `${parts[1]}月${parts[2]}日`
+  }
+  return String(dateVal)
 }
 </script>
 

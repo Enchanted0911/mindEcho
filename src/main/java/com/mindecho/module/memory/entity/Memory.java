@@ -31,10 +31,6 @@ public class Memory {
     @TableField("importance_score")
     private Integer importanceScore;
 
-    /** Milvus 中的向量 ID */
-    @TableField("milvus_id")
-    private Long milvusId;
-
     /** 逻辑删除 */
     @TableLogic
     @TableField("deleted")

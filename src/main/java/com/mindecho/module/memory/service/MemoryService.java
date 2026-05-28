@@ -2,26 +2,24 @@ package com.mindecho.module.memory.service;
 
 import com.mindecho.module.memory.entity.Memory;
 import com.mindecho.module.memory.mapper.MemoryMapper;
-import io.milvus.client.MilvusServiceClient;
-import io.milvus.grpc.SearchResults;
-import io.milvus.param.MetricType;
-import io.milvus.param.collection.LoadCollectionParam;
-import io.milvus.param.dml.InsertParam;
-import io.milvus.param.dml.SearchParam;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
- * 长期记忆服务
- * 基于 Milvus 向量数据库实现语义记忆检索
+ * 长期记忆服务（Summary 方案）
+ * <p>
+ * 设计思路：
+ * 1. 每次对话后，将用户发言追加到当前会话的临时缓冲（event 类型记忆，最多 MAX_BUFFER_TURNS 条）
+ * 2. 当缓冲满时，调用 AI 将现有摘要 + 缓冲内容压缩成新的摘要（summary 类型记忆，每用户仅保留一条）
+ * 3. 同时提取用户画像关键词（profile 类型记忆）
+ * 4. PromptService 读取 summary + profile 注入 System Prompt，实现跨会话长期记忆
+ * </p>
  */
 @Slf4j
 @Service
@@ -29,189 +27,193 @@ import java.util.List;
 public class MemoryService {
 
     private final MemoryMapper memoryMapper;
-    private final MilvusServiceClient milvusClient;
-    private final EmbeddingModel embeddingModel;
+    private final ChatClient chatClient;
 
-    @Value("${milvus.collection.name}")
-    private String collectionName;
+    /** 触发摘要压缩的对话轮数阈值 */
+    @Value("${mindecho.memory.summary-threshold:6}")
+    private Integer summaryThreshold;
 
-    @Value("${mindecho.embedding.top-k:5}")
-    private Integer topK;
+    // ─── Prompt 模板 ─────────────────────────────────────────────────────────
 
-    /** 提取记忆的 Prompt */
-    private static final String EXTRACT_MEMORY_PROMPT = """
-            从以下对话中提取值得长期记忆的信息，格式为 JSON 数组，每条记忆包含 type（profile/event/emotion）和 content：
-            用户说："%s"
-            AI回复："%s"
+    private static final String SUMMARIZE_PROMPT = """
+            你是一个专注于情绪健康的 AI 助手。请将以下对话摘要和最新对话整合成一段简洁的长期记忆摘要（200字以内）。
+            摘要应该保留用户的关键情绪状态、重要经历和个人特征，去掉重复和不重要的内容。
 
-            只提取重要且持久有效的信息，如用户的职业、性格、重要经历、情绪模式等。
-            如果没有值得提取的信息，返回空数组 []。
-            只返回 JSON 格式，不要其他内容：
+            【现有摘要】
+            %s
+
+            【最新对话片段】
+            %s
+
+            请直接输出新的摘要内容，不要有任何前缀：
             """;
 
+    private static final String EXTRACT_PROFILE_PROMPT = """
+            从以下用户发言中提取值得长期记忆的用户画像信息（职业、性格、爱好、家庭状况等），
+            用一句话描述，若没有明显信息则返回"无"。
+
+            用户说："%s"
+
+            只返回一句描述，不要任何前缀：
+            """;
+
+    // ─── 对外接口 ────────────────────────────────────────────────────────────
+
     /**
-     * 异步提取并保存记忆
+     * 异步处理对话记忆（在每轮对话结束后调用）
      */
     @Async
     public void extractAndSaveMemoryAsync(Long userId, String userMessage, String aiResponse) {
         try {
-            extractAndSaveMemory(userId, userMessage, aiResponse);
+            processMemory(userId, userMessage, aiResponse);
         } catch (Exception e) {
-            log.error("Async memory extraction failed: userId={}", userId, e);
+            log.error("Async memory processing failed: userId={}", userId, e);
         }
     }
 
     /**
-     * 提取并保存记忆
-     */
-    public void extractAndSaveMemory(Long userId, String userMessage, String aiResponse) {
-        // 简单的关键词规则提取（不依赖额外 AI 调用，节省 Token）
-        // 实际生产中可以调用 LLM 提取结构化记忆
-
-        // 检测是否包含有价值的信息
-        if (containsProfileInfo(userMessage)) {
-            String memoryContent = buildProfileMemory(userMessage);
-            if (memoryContent != null) {
-                saveMemory(userId, "profile", memoryContent, 8);
-            }
-        }
-
-        if (containsEventInfo(userMessage)) {
-            String memoryContent = "用户提到：" + userMessage.substring(0, Math.min(userMessage.length(), 100));
-            saveMemory(userId, "event", memoryContent, 6);
-        }
-    }
-
-    /**
-     * 基于向量相似度召回相关记忆
+     * 获取用户的相关记忆（供 PromptService 注入 System Prompt）
      */
     public List<Memory> recallRelevantMemories(Long userId, String query) {
-        try {
-            // 1. 生成 query 的 embedding
-            float[] queryEmbedding = embeddingModel.embed(query);
-
-            // 2. Load collection
-            milvusClient.loadCollection(LoadCollectionParam.newBuilder()
-                    .withCollectionName(collectionName)
-                    .build());
-
-            // 3. 向量搜索
-            List<Float> queryVector = toFloatList(queryEmbedding);
-
-            SearchParam searchParam = SearchParam.newBuilder()
-                    .withCollectionName(collectionName)
-                    .withMetricType(MetricType.IP)
-                    .withOutFields(Arrays.asList("memory_id", "user_id"))
-                    .withTopK(topK)
-                    .withVectors(Collections.singletonList(queryVector))
-                    .withVectorFieldName("embedding")
-                    .withExpr("user_id == " + userId)
-                    .build();
-
-            SearchResults results = milvusClient.search(searchParam).getData();
-
-            // 4. 根据 memory_id 查询 MySQL
-            // TODO: 从 SearchResults 提取 memory_id 列表后查询
-            log.debug("Vector search completed for userId={}", userId);
-
-            // fallback：直接从 MySQL 获取用户记忆
-            return memoryMapper.findByUserId(userId);
-
-        } catch (Exception e) {
-            log.warn("Vector search failed, fallback to MySQL: {}", e.getMessage());
-            return memoryMapper.findByUserId(userId);
-        }
+        return memoryMapper.findByUserId(userId);
     }
 
     /**
-     * 保存记忆到 MySQL + Milvus
+     * 手动保存记忆条目
      */
     public Memory saveMemory(Long userId, String type, String content, Integer importanceScore) {
-        // 检查是否已有相似记忆（简单查重）
+        // 简单查重：同类型同内容不重复存
         List<Memory> existing = memoryMapper.findByUserIdAndType(userId, type);
         for (Memory mem : existing) {
             if (mem.getContent().equals(content)) {
-                return mem; // 已存在，跳过
+                return mem;
             }
         }
 
-        // 保存到 MySQL
         Memory memory = new Memory();
         memory.setUserId(userId);
         memory.setMemoryType(type);
         memory.setContent(content);
         memory.setImportanceScore(importanceScore);
         memoryMapper.insert(memory);
-
-        // 异步保存到 Milvus
-        try {
-            saveToMilvus(memory);
-        } catch (Exception e) {
-            log.warn("Milvus save failed for memoryId={}: {}", memory.getId(), e.getMessage());
-        }
-
+        log.debug("Memory saved: userId={}, type={}", userId, type);
         return memory;
     }
 
+    // ─── 核心逻辑 ─────────────────────────────────────────────────────────────
+
     /**
-     * 保存向量到 Milvus
+     * 处理记忆：
+     * 1. 提取并保存用户画像（关键词匹配）
+     * 2. 将本轮对话追加到 event 缓冲
+     * 3. 若缓冲达到阈值，触发 AI 摘要压缩
      */
-    private void saveToMilvus(Memory memory) {
-        float[] embedding = embeddingModel.embed(memory.getContent());
-        List<Float> vector = toFloatList(embedding);
-
-        List<InsertParam.Field> fields = Arrays.asList(
-                new InsertParam.Field("id", Collections.singletonList(memory.getId())),
-                new InsertParam.Field("user_id", Collections.singletonList(memory.getUserId())),
-                new InsertParam.Field("memory_id", Collections.singletonList(memory.getId())),
-                new InsertParam.Field("embedding", Collections.singletonList(vector))
-        );
-
-        InsertParam insertParam = InsertParam.newBuilder()
-                .withCollectionName(collectionName)
-                .withFields(fields)
-                .build();
-
-        milvusClient.insert(insertParam);
-        log.debug("Memory saved to Milvus: id={}", memory.getId());
-    }
-
-    private List<Float> toFloatList(float[] array) {
-        List<Float> list = new java.util.ArrayList<>(array.length);
-        for (float f : array) {
-            list.add(f);
+    private void processMemory(Long userId, String userMessage, String aiResponse) {
+        // 1. 规则提取用户画像
+        if (containsProfileInfo(userMessage)) {
+            extractAndSaveProfile(userId, userMessage);
         }
-        return list;
+
+        // 2. 追加本轮对话到 event 缓冲
+        String eventContent = "用户：" + truncate(userMessage, 150) + "\nAI：" + truncate(aiResponse, 150);
+        saveMemory(userId, "event", eventContent, 5);
+
+        // 3. 判断是否需要触发摘要压缩
+        List<Memory> events = memoryMapper.findByUserIdAndType(userId, "event");
+        if (events.size() >= summaryThreshold) {
+            triggerSummaryCompression(userId, events);
+        }
     }
+
+    /**
+     * 触发 AI 摘要压缩：
+     * - 读取当前 summary（若有）
+     * - 将 event 缓冲拼接后请求 AI 生成新摘要
+     * - 更新 summary，清空 event 缓冲
+     */
+    private void triggerSummaryCompression(Long userId, List<Memory> events) {
+        try {
+            // 获取已有摘要
+            List<Memory> summaries = memoryMapper.findByUserIdAndType(userId, "summary");
+            String existingSummary = summaries.isEmpty() ? "（暂无历史摘要）" : summaries.get(0).getContent();
+
+            // 拼接最新 event 片段
+            StringBuilder eventBuffer = new StringBuilder();
+            events.forEach(e -> eventBuffer.append(e.getContent()).append("\n---\n"));
+
+            // 调用 AI 生成新摘要
+            String prompt = String.format(SUMMARIZE_PROMPT, existingSummary, eventBuffer);
+            String newSummary = chatClient.prompt()
+                    .user(prompt)
+                    .call()
+                    .content();
+
+            if (newSummary == null || newSummary.isBlank()) {
+                log.warn("AI returned empty summary for userId={}", userId);
+                return;
+            }
+
+            // 更新摘要：删旧存新
+            if (!summaries.isEmpty()) {
+                summaries.forEach(s -> {
+                    s.setDeleted(1);
+                    memoryMapper.updateById(s);
+                });
+            }
+            Memory summaryMemory = new Memory();
+            summaryMemory.setUserId(userId);
+            summaryMemory.setMemoryType("summary");
+            summaryMemory.setContent(newSummary.trim());
+            summaryMemory.setImportanceScore(10);
+            memoryMapper.insert(summaryMemory);
+
+            // 清空 event 缓冲（软删除）
+            events.forEach(e -> {
+                e.setDeleted(1);
+                memoryMapper.updateById(e);
+            });
+
+            log.info("Memory summary compressed for userId={}, events={}", userId, events.size());
+
+        } catch (Exception e) {
+            log.error("Summary compression failed for userId={}: {}", userId, e.getMessage());
+        }
+    }
+
+    /**
+     * AI 提取用户画像并保存
+     */
+    private void extractAndSaveProfile(Long userId, String userMessage) {
+        try {
+            String prompt = String.format(EXTRACT_PROFILE_PROMPT, userMessage);
+            String profile = chatClient.prompt()
+                    .user(prompt)
+                    .call()
+                    .content();
+
+            if (profile != null && !profile.isBlank() && !"无".equals(profile.trim())) {
+                saveMemory(userId, "profile", profile.trim(), 8);
+            }
+        } catch (Exception e) {
+            log.warn("Profile extraction failed for userId={}: {}", userId, e.getMessage());
+        }
+    }
+
+    // ─── 工具方法 ─────────────────────────────────────────────────────────────
 
     private boolean containsProfileInfo(String text) {
-        String[] profileKeywords = {"我是", "我叫", "我的工作", "我的职业", "我是程序员", "我是学生",
-                "我喜欢", "我不喜欢", "我的性格", "我比较内向", "我比较外向"};
-        for (String keyword : profileKeywords) {
-            if (text.contains(keyword)) {
-                return true;
-            }
+        String[] keywords = {"我是", "我叫", "我的工作", "我的职业", "我喜欢", "我不喜欢",
+                "我的性格", "我比较内向", "我比较外向", "我是程序员", "我是学生",
+                "我今年", "我住在", "我有一个"};
+        for (String kw : keywords) {
+            if (text.contains(kw)) return true;
         }
         return false;
     }
 
-    private boolean containsEventInfo(String text) {
-        String[] eventKeywords = {"失恋", "分手", "换工作", "毕业", "考试", "面试",
-                "生病", "家人", "朋友", "压力", "今天发生了"};
-        for (String keyword : eventKeywords) {
-            if (text.contains(keyword)) {
-                return true;
-            }
-        }
-        return text.length() > 50; // 超过50字的也考虑记忆
-    }
-
-    private String buildProfileMemory(String text) {
-        if (text.contains("程序员")) return "用户是程序员";
-        if (text.contains("学生")) return "用户是学生";
-        if (text.contains("内向")) return "用户性格偏内向";
-        if (text.contains("焦虑")) return "用户有焦虑倾向";
-        return null;
+    private String truncate(String text, int maxLen) {
+        if (text == null) return "";
+        return text.length() > maxLen ? text.substring(0, maxLen) + "…" : text;
     }
 }
 

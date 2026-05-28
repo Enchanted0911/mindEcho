@@ -63,7 +63,8 @@ public class EmotionService {
     public String analyzeEmotion(String text) {
         try {
             String prompt = String.format(EMOTION_ANALYZE_PROMPT, text);
-            String response = chatClient.prompt(prompt)
+            String response = chatClient.prompt()
+                    .user(prompt)
                     .call()
                     .content();
 

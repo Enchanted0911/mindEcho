@@ -2,7 +2,7 @@
 import {computed, nextTick, onMounted, ref} from 'vue'
 import {useChatStore} from '../../store/chat'
 import {useUserStore} from '../../store/user'
-import {createSseConnection, getMessageList} from '../../api/chat'
+import {createSseConnection, deleteSession, getMessageList, getSessionList} from '../../api/chat'
 import {getPersonalityInfo} from '../../utils/emotion'
 
 const chatStore = useChatStore()
@@ -13,17 +13,75 @@ const scrollToBottom = ref('msg-bottom')
 const showSessionPanel = ref(false)
 const showPersonalityPicker = ref(false)
 const isComposing = ref(false)
+const isLoadingSessions = ref(false)
 
 const personality = computed(() => getPersonalityInfo(userStore.currentPersonality))
 const messages = computed(() => chatStore.messages)
 const isStreaming = computed(() => chatStore.isStreaming)
+const sessions = computed(() => chatStore.sessions)
 
 onMounted(() => {
-  // 加载历史消息（如果有会话）
+  loadSessions()
   if (chatStore.currentSessionId) {
     loadHistory()
   }
 })
+
+async function loadSessions() {
+  isLoadingSessions.value = true
+  try {
+    const result = await getSessionList()
+    chatStore.setSessions(result.records || [])
+  } catch (e) {
+    console.error('Load sessions failed:', e)
+  } finally {
+    isLoadingSessions.value = false
+  }
+}
+
+async function switchSession(sessionId: number) {
+  chatStore.setCurrentSession(sessionId)
+  chatStore.clearMessages()
+  showSessionPanel.value = false
+  try {
+    const list = await getMessageList(sessionId)
+    list.forEach(msg => {
+      chatStore.addMessage({
+        id: String(msg.id),
+        role: msg.role,
+        content: msg.content,
+        emotion: msg.emotion,
+        riskLevel: msg.riskLevel,
+        createdAt: new Date(msg.createdTime).getTime()
+      })
+    })
+    scrollToMsg()
+  } catch (e) {
+    console.error('Switch session failed:', e)
+  }
+}
+
+async function removeSession(sessionId: number) {
+  uni.showModal({
+    title: '删除会话',
+    content: '确认删除这条对话记录？',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          await deleteSession(sessionId)
+          // 从 store 中移除
+          chatStore.setSessions(sessions.value.filter(s => s.id !== sessionId))
+          if (chatStore.currentSessionId === sessionId) {
+            chatStore.setCurrentSession(null)
+            chatStore.clearMessages()
+          }
+        } catch (e) {
+          uni.showToast({ title: '删除失败', icon: 'none' })
+        }
+      }
+    }
+  })
+}
 
 async function loadHistory() {
   try {
@@ -102,6 +160,8 @@ function startNewChat() {
   chatStore.setCurrentSession(null)
   chatStore.clearMessages()
   showSessionPanel.value = false
+  // 刷新会话列表（新对话发送后后端会创建新 session）
+  loadSessions()
 }
 
 const PERSONALITIES = [
@@ -213,6 +273,49 @@ async function selectPersonality(code: string) {
       >
         <text v-if="!isStreaming">↑</text>
         <text v-else class="loading-dot">●</text>
+      </view>
+    </view>
+
+    <!-- 会话列表侧边面板 -->
+    <view v-if="showSessionPanel" class="session-overlay" @click.self="showSessionPanel = false">
+      <view class="session-panel">
+        <view class="session-panel-header">
+          <text class="session-panel-title">历史对话</text>
+          <text class="session-panel-close" @click="showSessionPanel = false">✕</text>
+        </view>
+
+        <!-- 新对话按钮 -->
+        <view class="new-session-btn" @click="startNewChat">
+          <text class="new-session-icon">✏️</text>
+          <text class="new-session-text">开始新对话</text>
+        </view>
+
+        <!-- 加载中 -->
+        <view v-if="isLoadingSessions" class="session-loading">
+          <text>加载中...</text>
+        </view>
+
+        <!-- 空状态 -->
+        <view v-else-if="sessions.length === 0" class="session-empty">
+          <text>暂无历史对话</text>
+        </view>
+
+        <!-- 会话列表 -->
+        <scroll-view v-else class="session-list" scroll-y>
+          <view
+            v-for="session in sessions"
+            :key="session.id"
+            class="session-item"
+            :class="{ 'session-active': chatStore.currentSessionId === session.id }"
+            @click="switchSession(session.id)"
+          >
+            <view class="session-item-content">
+              <text class="session-title">{{ session.title || '新对话' }}</text>
+              <text class="session-time">{{ session.updatedTime ? session.updatedTime.slice(5, 16) : '' }}</text>
+            </view>
+            <text class="session-delete" @click.stop="removeSession(session.id)">🗑</text>
+          </view>
+        </scroll-view>
       </view>
     </view>
 
@@ -468,6 +571,110 @@ async function selectPersonality(code: string) {
 .loading-dot {
   animation: pulse 0.8s infinite;
   font-size: 28rpx !important;
+}
+
+/* 会话侧边面板 */
+.session-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  flex-direction: row;
+}
+
+.session-panel {
+  width: 75%;
+  max-width: 560rpx;
+  height: 100%;
+  background: #13132a;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.session-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 100rpx 32rpx 24rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+}
+
+.session-panel-title {
+  font-size: 36rpx;
+  color: #e8d5ff;
+  font-weight: 600;
+}
+
+.session-panel-close {
+  font-size: 36rpx;
+  color: #7a6b9a;
+  padding: 8rpx;
+}
+
+.new-session-btn {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 28rpx 32rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+  background: rgba(184, 158, 232, 0.08);
+}
+
+.new-session-icon { font-size: 32rpx; }
+.new-session-text { font-size: 28rpx; color: #b89ee8; font-weight: 500; }
+
+.session-loading, .session-empty {
+  padding: 60rpx 32rpx;
+  text-align: center;
+  color: #5a5070;
+  font-size: 26rpx;
+}
+
+.session-list {
+  flex: 1;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 32rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.04);
+}
+
+.session-active {
+  background: rgba(184, 158, 232, 0.1);
+}
+
+.session-item-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  overflow: hidden;
+}
+
+.session-title {
+  font-size: 28rpx;
+  color: #c4a8f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-time {
+  font-size: 22rpx;
+  color: #5a5070;
+}
+
+.session-delete {
+  font-size: 32rpx;
+  padding: 8rpx 8rpx 8rpx 24rpx;
+  color: #5a5070;
 }
 
 /* 人格选择器 */

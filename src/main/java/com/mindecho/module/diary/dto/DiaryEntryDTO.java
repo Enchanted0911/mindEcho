@@ -1,9 +1,9 @@
 package com.mindecho.module.diary.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Builder;
 import lombok.Data;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -14,13 +14,15 @@ import java.time.LocalDateTime;
 public class DiaryEntryDTO {
 
     private Long id;
-    private LocalDate diaryDate;
+    private String diaryDate;
     private String emotion;
     private Integer emotionIntensity;
     private String content;
     private String aiSummary;
     private String weather;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdTime;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime updatedTime;
 }
 

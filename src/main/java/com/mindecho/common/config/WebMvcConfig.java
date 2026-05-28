@@ -18,21 +18,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 拦截所有路径，排除不需要认证的公开接口
         registry.addInterceptor(authInterceptor)
-                .addPathPatterns("/auth/wx-login")  // 不拦截登录
+                .addPathPatterns("/**")
                 .excludePathPatterns(
                         "/auth/wx-login",
                         "/actuator/**"
-                );
-        // 实际需要认证的路径
-        registry.addInterceptor(authInterceptor)
-                .addPathPatterns(
-                        "/chat/**",
-                        "/memory/**",
-                        "/emotion/**",
-                        "/diary/**",
-                        "/payment/**",
-                        "/user/**"
                 );
     }
 
