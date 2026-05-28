@@ -42,6 +42,14 @@
   padding: 24rpx 24rpx 0;
   overflow: hidden;
 }
+
+/* 加载更多历史消息提示 */
+.load-more-tip {
+  text-align: center;
+  padding: 20rpx 0;
+  color: #5a5070;
+  font-size: 24rpx;
+}
 .welcome-area {
   display: flex;
   flex-direction: column;
@@ -195,9 +203,30 @@
   font-size: 36rpx;
   font-weight: bold;
 }
-.loading-dot {
-  animation: pulse 0.8s infinite;
+
+/* 停止按钮 */
+.stop-btn {
+  background: rgba(220, 80, 80, 0.85);
+  box-shadow: 0 4rpx 16rpx rgba(220, 80, 80, 0.4);
+}
+.stop-icon {
+  color: white;
   font-size: 28rpx !important;
+}
+
+/* 用户消息编辑提示图标 */
+.edit-hint {
+  display: inline-block;
+  margin-left: 8rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.5);
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+/* 消息气泡 relative 定位（弹出层等后续需要时备用） */
+.message-bubble {
+  position: relative;
 }
 
 /* 会话侧边面板 */
@@ -220,6 +249,8 @@
   display: flex;
   flex-direction: column;
   padding: 0;
+  /* 必须设置 overflow:hidden，子 scroll-view 才能正确继承 flex 剩余高度 */
+  overflow: hidden;
 }
 .session-panel-header {
   display: flex;
@@ -258,6 +289,11 @@
 }
 .session-list {
   flex: 1;
+  /* 微信小程序中 scroll-view 必须设定明确高度才能滚动；
+     配合父容器 flex: column + overflow:hidden 使用 height:0 + flex:1 */
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .session-item {
   display: flex;
@@ -386,4 +422,74 @@
 .p-desc {
   font-size: 24rpx;
   color: #7a6b9a;
+}
+
+/* 编辑消息弹窗 */
+.edit-popup {
+  background: #1a1a2e;
+  border-top-left-radius: 40rpx;
+  border-top-right-radius: 40rpx;
+  padding: 40rpx 32rpx 80rpx;
+  width: 100%;
+  border: 1rpx solid rgba(184, 158, 232, 0.15);
+}
+.edit-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32rpx;
+}
+.edit-popup-title {
+  font-size: 34rpx;
+  color: #e8d5ff;
+  font-weight: 600;
+}
+.edit-popup-close {
+  font-size: 32rpx;
+  color: #7a6b9a;
+  padding: 8rpx;
+}
+.edit-textarea {
+  width: 100%;
+  font-size: 30rpx;
+  color: #e8d5ff;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(184, 158, 232, 0.2);
+  border-radius: 20rpx;
+  padding: 24rpx 28rpx;
+  min-height: 120rpx;
+  margin-bottom: 32rpx;
+}
+.edit-popup-actions {
+  display: flex;
+  gap: 24rpx;
+}
+.edit-cancel-btn {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 44rpx;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.edit-cancel-btn text {
+  color: #7a6b9a;
+  font-size: 30rpx;
+}
+.edit-confirm-btn {
+  flex: 2;
+  height: 88rpx;
+  border-radius: 44rpx;
+  background: linear-gradient(135deg, #b89ee8 0%, #8b6fd1 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 20rpx rgba(139, 111, 209, 0.4);
+}
+.edit-confirm-btn text {
+  color: white;
+  font-size: 30rpx;
+  font-weight: 600;
 }

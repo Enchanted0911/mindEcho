@@ -1,11 +1,26 @@
 <script setup lang="ts">
 import {useUserStore} from '../../store/user'
+import {usePersonalityStore} from '../../store/personality'
 import {getPersonalityInfo} from '../../utils/emotion'
-import {computed} from 'vue'
+import {computed, onMounted} from 'vue'
 
 const userStore = useUserStore()
+const personalityStore = usePersonalityStore()
 
-const personality = computed(() => getPersonalityInfo(userStore.currentPersonality))
+onMounted(async () => {
+  await personalityStore.ensureLoaded()
+})
+
+/**
+ * 优先使用接口数据（name 字段），接口未加载时降级使用 PERSONALITY_MAP（label 字段）
+ */
+const personality = computed(() => {
+  const found = personalityStore.findByCode(userStore.currentPersonality)
+  if (found) {
+    return { label: found.name, desc: found.description, emoji: found.emoji }
+  }
+  return getPersonalityInfo(userStore.currentPersonality)
+})
 
 function goToVip() {
   uni.navigateTo({ url: '/pages/vip/index' })

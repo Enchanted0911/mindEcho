@@ -129,7 +129,7 @@ async function handleBuy() {
 
       <!-- 免费版限制提示 -->
       <view class="free-tip">
-        <text class="free-tip-text">免费版每日 10 次对话，升级后无限制</text>
+        <text class="free-tip-text">免费版每日对话次数有限，升级后无限制</text>
       </view>
 
       <view style="height: 200rpx" />

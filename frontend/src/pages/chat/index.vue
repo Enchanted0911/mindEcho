@@ -2,85 +2,183 @@
 import {computed, nextTick, onMounted, ref} from 'vue'
 import {useChatStore} from '../../store/chat'
 import {useUserStore} from '../../store/user'
-import {createSseConnection, deleteSession, getMessageList, getSessionList} from '../../api/chat'
-import {getPersonalityList, type Personality} from '../../api/personality'
+import {usePersonalityStore} from '../../store/personality'
+import {
+  createEditSseConnection,
+  createSseConnection,
+  deleteSession,
+  getMessageList,
+  getSessionList,
+  stopStreaming
+} from '../../api/chat'
 import {parseDate} from '../../utils/emotion'
 
 const chatStore = useChatStore()
 const userStore = useUserStore()
+const personalityStore = usePersonalityStore()
 
 const inputText = ref('')
+/** 通过切换 msg-bottom / msg-bottom-alt 强制 scroll-into-view 在值不变时也触发 */
 const scrollToBottom = ref('msg-bottom')
+let scrollToggle = false
+/** 向上加载历史消息后，滚动锚定到这条消息（保持视口位置不跳动） */
+const scrollToAnchor = ref('')
 const showSessionPanel = ref(false)
 const showPersonalityPicker = ref(false)
 const isComposing = ref(false)
 const isLoadingSessions = ref(false)
+/** 编辑浮层：显示状态、目标消息 ID 及编辑文本 */
+const showEditPopup = ref(false)
+const editTargetMsgId = ref('')
+const editText = ref('')
 
-// 人格列表（从接口动态加载）
-const personalities = ref<Personality[]>([])
+// ── 人格（使用全局 store，自动去重请求）────────────────────
+const personalities = computed(() => personalityStore.list)
+const femalePersonalities = computed(() => personalityStore.femaleList)
+const malePersonalities = computed(() => personalityStore.maleList)
 
-// 当前人格信息（从列表中查找，兜底显示默认值）
 const personality = computed(() => {
-  const found = personalities.value.find(p => p.code === userStore.currentPersonality)
-  return found || { code: userStore.currentPersonality, name: '心屿', emoji: '🌸', description: '', gender: 'female', style: 'gentle' }
+  const found = personalityStore.findByCode(userStore.currentPersonality)
+  // 兜底：后端 Personality 字段是 name，不是 label
+  return found ?? { code: userStore.currentPersonality, name: '心屿', emoji: '🌸', description: '', gender: 'female', style: 'gentle' }
 })
 
-// 按性别分组
-const femalePersonalities = computed(() => personalities.value.filter(p => p.gender === 'female'))
-const malePersonalities = computed(() => personalities.value.filter(p => p.gender === 'male'))
-
+// ── 消息 / 会话 ────────────────────────────────────────────
 const messages = computed(() => chatStore.messages)
 const isStreaming = computed(() => chatStore.isStreaming)
 const sessions = computed(() => chatStore.sessions)
+const isLoadingMoreMsg = computed(() => chatStore.isLoadingMoreMsg)
+const isLoadingMoreSession = computed(() => chatStore.isLoadingMoreSession)
 
-onMounted(() => {
-  loadPersonalities()
-  loadSessions()
+onMounted(async () => {
+  // 人格列表：首次调用时请求，已加载则直接复用
+  await personalityStore.ensureLoaded()
+  await loadSessions(true)
   if (chatStore.currentSessionId) {
-    loadHistory()
+    await loadHistory(chatStore.currentSessionId)
   }
 })
 
-async function loadPersonalities() {
-  try {
-    personalities.value = await getPersonalityList()
-  } catch (e) {
-    console.error('Load personalities failed:', e)
-  }
-}
+// ── 会话列表（分页懒加载）─────────────────────────────────
 
-async function loadSessions() {
-  isLoadingSessions.value = true
+/**
+ * 加载会话列表
+ * @param reset true = 第一次加载（覆盖），false = 加载更多（追加）
+ */
+async function loadSessions(reset = false) {
+  if (!reset && (!chatStore.hasMoreSessions() || chatStore.isLoadingMoreSession)) return
+
+  const nextPage = reset ? 1 : chatStore.sessionPage + 1
+  if (!reset) chatStore.isLoadingMoreSession = true
+  else isLoadingSessions.value = true
+
   try {
-    const result = await getSessionList()
-    chatStore.setSessions(result.records || [])
+    const result = await getSessionList(nextPage, 20)
+    if (reset) {
+      chatStore.setSessions(result.records || [], result.pages ?? 1)
+    } else {
+      chatStore.appendSessions(result.records || [], nextPage, result.pages ?? nextPage)
+    }
   } catch (e) {
     console.error('Load sessions failed:', e)
   } finally {
     isLoadingSessions.value = false
+    chatStore.isLoadingMoreSession = false
   }
 }
 
-async function switchSession(sessionId: string) {
-  chatStore.setCurrentSession(sessionId)
+/** 会话面板滚动到底：懒加载更多会话 */
+function onSessionScrollToLower() {
+  loadSessions(false)
+}
+
+// ── 消息列表（分页懒加载）─────────────────────────────────
+
+/**
+ * 将后端返回的分页消息（倒序）转为正序并写入 store
+ * @param records    后端返回的倒序记录
+ * @param page       当前页码
+ * @param totalPages 总页数
+ * @param prepend    true = 插入到头部（加载更早消息），false = 覆盖（首次加载）
+ */
+function applyMessagePage(
+  records: any[],
+  page: number,
+  totalPages: number,
+  prepend: boolean
+) {
+  // 后端按 created_time DESC 排序，第 1 页是最新消息
+  // 转为正序（时间从早到晚）再展示
+  const sorted = [...records].reverse().map(msg => ({
+    id: String(msg.id),
+    role: msg.role as 'user' | 'assistant',
+    content: msg.content,
+    emotion: msg.emotion,
+    riskLevel: msg.riskLevel,
+    createdAt: parseDate(msg.createdTime).getTime()
+  }))
+
+  chatStore.msgTotalPages = totalPages
+  chatStore.msgPage = page
+
+  if (prepend) {
+    chatStore.prependMessages(sorted)
+  } else {
+    chatStore.clearMessages()
+    sorted.forEach(m => chatStore.addMessage(m))
+  }
+}
+
+/** 切换会话 / 历史：首次加载最新一页消息 */
+async function loadHistory(sessionId: string) {
   chatStore.clearMessages()
-  showSessionPanel.value = false
   try {
-    const list = await getMessageList(sessionId)
-    list.forEach(msg => {
-      chatStore.addMessage({
-        id: String(msg.id),
-        role: msg.role,
-        content: msg.content,
-        emotion: msg.emotion,
-        riskLevel: msg.riskLevel,
-        createdAt: parseDate(msg.createdTime).getTime()
-      })
-    })
+    const result = await getMessageList(sessionId, 1, 20)
+    applyMessagePage(result.records, 1, result.pages, false)
     scrollToMsg()
   } catch (e) {
-    console.error('Switch session failed:', e)
+    console.error('Load history failed:', e)
   }
+}
+
+/** 消息区域滚动到顶：加载更早一页消息 */
+async function onMsgScrollToUpper() {
+  if (!chatStore.currentSessionId) return
+  if (!chatStore.hasMoreMessages() || isLoadingMoreMsg.value) return
+
+  chatStore.isLoadingMoreMsg = true
+  const nextPage = chatStore.msgPage + 1
+  // 记录当前最早一条消息的 id，加载完后滚回到这里
+  const anchorId = messages.value[0]?.id ?? ''
+
+  try {
+    const result = await getMessageList(chatStore.currentSessionId, nextPage, 20)
+    if (result.records.length > 0) {
+      applyMessagePage(result.records, nextPage, result.pages, true)
+      // 恢复滚动位置到加载前的第一条消息
+      if (anchorId) {
+        await nextTick()
+        scrollToAnchor.value = `msg-${anchorId}`
+        // 滚动完成后清空 anchor，避免影响后续底部滚动
+        setTimeout(() => { scrollToAnchor.value = '' }, 300)
+      }
+    } else {
+      // 没有更多了，更新 totalPages 防止继续请求
+      chatStore.msgTotalPages = chatStore.msgPage
+    }
+  } catch (e) {
+    console.error('Load more messages failed:', e)
+  } finally {
+    chatStore.isLoadingMoreMsg = false
+  }
+}
+
+// ── 会话操作 ─────────────────────────────────────────────
+
+async function switchSession(sessionId: string) {
+  chatStore.setCurrentSession(sessionId)
+  showSessionPanel.value = false
+  await loadHistory(sessionId)
 }
 
 async function removeSession(sessionId: string) {
@@ -91,8 +189,10 @@ async function removeSession(sessionId: string) {
       if (res.confirm) {
         try {
           await deleteSession(sessionId)
-          // 从 store 中移除
-          chatStore.setSessions(sessions.value.filter(s => s.id !== sessionId))
+          chatStore.setSessions(
+            sessions.value.filter(s => s.id !== sessionId),
+            chatStore.sessionTotalPages
+          )
           if (chatStore.currentSessionId === sessionId) {
             chatStore.setCurrentSession(null)
             chatStore.clearMessages()
@@ -105,25 +205,7 @@ async function removeSession(sessionId: string) {
   })
 }
 
-async function loadHistory() {
-  try {
-    const list = await getMessageList(chatStore.currentSessionId!)
-    chatStore.clearMessages()
-    list.forEach(msg => {
-      chatStore.addMessage({
-        id: String(msg.id),
-        role: msg.role,
-        content: msg.content,
-        emotion: msg.emotion,
-        riskLevel: msg.riskLevel,
-        createdAt: parseDate(msg.createdTime).getTime()
-      })
-    })
-    scrollToMsg()
-  } catch (e) {
-    console.error('Load history failed:', e)
-  }
-}
+// ── 发消息 ───────────────────────────────────────────────
 
 async function sendMessage() {
   const text = inputText.value.trim()
@@ -131,7 +213,6 @@ async function sendMessage() {
 
   inputText.value = ''
 
-  // 添加用户消息
   const userMsgId = `user_${Date.now()}`
   chatStore.addMessage({
     id: userMsgId,
@@ -141,7 +222,6 @@ async function sendMessage() {
   })
   scrollToMsg()
 
-  // 添加 AI 消息占位
   const aiMsgId = `ai_${Date.now()}`
   chatStore.addMessage({
     id: aiMsgId,
@@ -150,10 +230,8 @@ async function sendMessage() {
     createdAt: Date.now(),
     isStreaming: true
   })
-  chatStore.startStreaming(aiMsgId)
 
-  // 建立 SSE 连接
-  createSseConnection(
+  const task = createSseConnection(
     chatStore.currentSessionId,
     text,
     (chunk) => {
@@ -162,19 +240,121 @@ async function sendMessage() {
     },
     () => {
       chatStore.finishStreaming(aiMsgId)
+      chatStore.setActiveRequestTask(null)
+      // 发送完成后刷新会话列表（标题可能更新了）
+      loadSessions(true)
       scrollToMsg()
     },
     (err) => {
       console.error('SSE error:', err)
       chatStore.finishStreaming(aiMsgId)
+      chatStore.setActiveRequestTask(null)
       uni.showToast({ title: 'AI 回复失败，请重试', icon: 'none' })
     }
   )
+  chatStore.startStreaming(aiMsgId, task)
 }
+
+// ── 停止流式输出 ─────────────────────────────────────────
+
+async function handleStopStreaming() {
+  // 通知后端停止
+  try {
+    await stopStreaming()
+  } catch (e) {
+    console.error('Stop streaming failed:', e)
+  }
+  // 同时中止前端请求，避免继续等待
+  if (chatStore.activeRequestTask) {
+    chatStore.activeRequestTask.abort()
+    chatStore.setActiveRequestTask(null)
+  }
+  // 更新流式状态
+  if (chatStore.streamingMessageId) {
+    chatStore.finishStreaming(chatStore.streamingMessageId)
+  }
+}
+
+// ── 编辑消息 ─────────────────────────────────────────────
+
+/** 长按用户消息：弹出编辑浮层 */
+function onLongPressUserMsg(msgId: string, content: string) {
+  if (isStreaming.value) return
+  editTargetMsgId.value = msgId
+  editText.value = content
+  showEditPopup.value = true
+}
+
+/** 单击用户消息气泡：弹出操作选项（编辑/重新发送） */
+function onTapUserMsg(msgId: string, content: string) {
+  if (isStreaming.value) return
+  // 防止误触：只有点击自己的消息时才弹出
+  uni.showActionSheet({
+    itemList: ['编辑并重新发送'],
+    success: (res) => {
+      if (res.tapIndex === 0) {
+        editTargetMsgId.value = msgId
+        editText.value = content
+        showEditPopup.value = true
+      }
+    }
+  })
+}
+
+/** 确认编辑，调用编辑接口并重新流式输出 */
+async function confirmEdit() {
+  const newText = editText.value.trim()
+  if (!newText || !editTargetMsgId.value || !chatStore.currentSessionId) return
+
+  showEditPopup.value = false
+
+  // 前端先同步：更新该消息内容，删除其后所有消息
+  chatStore.updateMessageContent(editTargetMsgId.value, newText)
+  chatStore.removeMessagesAfter(editTargetMsgId.value)
+  scrollToMsg()
+
+  // 添加 AI 回复占位（流式）
+  const aiMsgId = `ai_edit_${Date.now()}`
+  chatStore.addMessage({
+    id: aiMsgId,
+    role: 'assistant',
+    content: '',
+    createdAt: Date.now(),
+    isStreaming: true
+  })
+  scrollToMsg()
+
+  const task = createEditSseConnection(
+    editTargetMsgId.value,
+    chatStore.currentSessionId,
+    newText,
+    (chunk) => {
+      chatStore.updateStreamingMessage(aiMsgId, chunk)
+      scrollToMsg()
+    },
+    () => {
+      chatStore.finishStreaming(aiMsgId)
+      chatStore.setActiveRequestTask(null)
+      loadSessions(true)
+      scrollToMsg()
+    },
+    (err) => {
+      console.error('Edit SSE error:', err)
+      chatStore.finishStreaming(aiMsgId)
+      chatStore.setActiveRequestTask(null)
+      uni.showToast({ title: '重新发送失败，请重试', icon: 'none' })
+    }
+  )
+  chatStore.startStreaming(aiMsgId, task)
+}
+
+// ── 工具函数 ─────────────────────────────────────────────
 
 function scrollToMsg() {
   nextTick(() => {
-    scrollToBottom.value = 'msg-bottom'
+    // 通过交替切换两个锚点 id，保证即使上次值相同也能触发 scroll-into-view
+    scrollToggle = !scrollToggle
+    scrollToBottom.value = scrollToggle ? 'msg-bottom' : 'msg-bottom-alt'
   })
 }
 
@@ -182,15 +362,14 @@ function startNewChat() {
   chatStore.setCurrentSession(null)
   chatStore.clearMessages()
   showSessionPanel.value = false
-  // 刷新会话列表（新对话发送后后端会创建新 session）
-  loadSessions()
+  loadSessions(true)
 }
 
 async function selectPersonality(code: string) {
   userStore.updatePersonality(code)
   showPersonalityPicker.value = false
   startNewChat()
-  const found = personalities.value.find(p => p.code === code)
+  const found = personalityStore.findByCode(code)
   uni.showToast({
     title: `已切换到 ${found?.name ?? '心屿'}`,
     icon: 'none'
@@ -207,7 +386,8 @@ async function selectPersonality(code: string) {
       </view>
       <view class="header-center" @click="showPersonalityPicker = true">
         <text class="personality-emoji">{{ personality.emoji }}</text>
-        <text class="personality-name">{{ personality.label }}</text>
+        <!-- 修复：后端字段是 name，不是 label -->
+        <text class="personality-name">{{ personality.name }}</text>
         <text class="header-chevron">›</text>
       </view>
       <view class="header-right" @click="startNewChat">
@@ -215,17 +395,27 @@ async function selectPersonality(code: string) {
       </view>
     </view>
 
-    <!-- 消息列表 -->
+    <!-- 消息列表（支持向上滚动懒加载历史消息） -->
     <scroll-view
       class="messages-container"
       scroll-y
-      :scroll-into-view="scrollToBottom"
+      :scroll-into-view="scrollToAnchor || scrollToBottom"
       :scroll-with-animation="true"
+      @scrolltoupper="onMsgScrollToUpper"
+      upper-threshold="60"
     >
+      <!-- 加载更早消息提示 -->
+      <view v-if="isLoadingMoreMsg" class="load-more-tip">
+        <text>加载中...</text>
+      </view>
+      <view v-else-if="chatStore.msgTotalPages !== -1 && !chatStore.hasMoreMessages()" class="load-more-tip">
+        <text>已加载全部消息</text>
+      </view>
+
       <!-- 欢迎消息 -->
       <view v-if="messages.length === 0" class="welcome-area">
         <text class="welcome-emoji">{{ personality.emoji }}</text>
-        <text class="welcome-text">嗨，我是你的{{ personality.label }}</text>
+        <text class="welcome-text">嗨，我是你的{{ personality.name }}</text>
         <text class="welcome-desc">有什么想聊的吗？今天感觉怎么样？🌙</text>
         <view class="quick-replies">
           <text
@@ -237,14 +427,14 @@ async function selectPersonality(code: string) {
         </view>
       </view>
 
-      <!-- 消息气泡 -->
+      <!-- 消息气泡（id 用于向上加载后恢复滚动位置） -->
       <view
         v-for="msg in messages"
         :key="msg.id"
+        :id="`msg-${msg.id}`"
         class="message-wrapper"
         :class="{ 'message-user': msg.role === 'user', 'message-ai': msg.role === 'assistant' }"
       >
-        <!-- AI 头像 -->
         <view v-if="msg.role === 'assistant'" class="avatar ai-avatar">
           {{ personality.emoji }}
         </view>
@@ -256,15 +446,19 @@ async function selectPersonality(code: string) {
             'bubble-ai': msg.role === 'assistant',
             'bubble-streaming': msg.isStreaming
           }"
+          @longpress="msg.role === 'user' && !isStreaming ? onLongPressUserMsg(msg.id, msg.content) : undefined"
+          @tap="msg.role === 'user' && !isStreaming ? onTapUserMsg(msg.id, msg.content) : undefined"
         >
           <text class="message-text" :user-select="true">{{ msg.content }}</text>
-          <!-- 打字机光标 -->
           <text v-if="msg.isStreaming" class="typing-cursor">▋</text>
+          <!-- 用户消息编辑提示图标（非流式时显示） -->
+          <text v-if="msg.role === 'user' && !isStreaming" class="edit-hint">✏</text>
         </view>
       </view>
 
-      <!-- 底部锚点 -->
+      <!-- 底部锚点（双锚点交替，解决 scroll-into-view 值不变时不触发的问题） -->
       <view id="msg-bottom" class="msg-bottom-anchor" />
+      <view id="msg-bottom-alt" class="msg-bottom-anchor" />
     </scroll-view>
 
     <!-- 输入区域 -->
@@ -282,17 +476,25 @@ async function selectPersonality(code: string) {
           @confirm="sendMessage"
         />
       </view>
+      <!-- 流式输出中：显示停止按钮；空闲时：显示发送按钮 -->
       <view
+        v-if="isStreaming"
+        class="send-btn stop-btn"
+        @click="handleStopStreaming"
+      >
+        <text class="stop-icon">■</text>
+      </view>
+      <view
+        v-else
         class="send-btn"
-        :class="{ 'send-btn-active': inputText.trim() && !isStreaming, 'send-btn-loading': isStreaming }"
+        :class="{ 'send-btn-active': inputText.trim() }"
         @click="sendMessage"
       >
-        <text v-if="!isStreaming">↑</text>
-        <text v-else class="loading-dot">●</text>
+        <text>↑</text>
       </view>
     </view>
 
-    <!-- 会话列表侧边面板 -->
+    <!-- 会话列表侧边面板（支持向下滚动懒加载更多会话） -->
     <view v-if="showSessionPanel" class="session-overlay" @click="showSessionPanel = false">
       <view class="session-panel" @click.stop>
         <view class="session-panel-header">
@@ -300,24 +502,27 @@ async function selectPersonality(code: string) {
           <text class="session-panel-close" @click="showSessionPanel = false">✕</text>
         </view>
 
-        <!-- 新对话按钮 -->
         <view class="new-session-btn" @click="startNewChat">
           <text class="new-session-icon">✏️</text>
           <text class="new-session-text">开始新对话</text>
         </view>
 
-        <!-- 加载中 -->
         <view v-if="isLoadingSessions" class="session-loading">
           <text>加载中...</text>
         </view>
 
-        <!-- 空状态 -->
         <view v-else-if="sessions.length === 0" class="session-empty">
           <text>暂无历史对话</text>
         </view>
 
-        <!-- 会话列表 -->
-        <scroll-view v-else class="session-list" scroll-y>
+        <!-- 会话列表（滚动到底懒加载更多） -->
+        <scroll-view
+          v-else
+          class="session-list"
+          scroll-y
+          @scrolltolower="onSessionScrollToLower"
+          lower-threshold="60"
+        >
           <view
             v-for="session in sessions"
             :key="session.id"
@@ -331,7 +536,42 @@ async function selectPersonality(code: string) {
             </view>
             <text class="session-delete" @click.stop="removeSession(session.id)">🗑</text>
           </view>
+
+          <!-- 加载更多会话状态 -->
+          <view v-if="isLoadingMoreSession" class="session-loading">
+            <text>加载更多...</text>
+          </view>
+          <view v-else-if="!chatStore.hasMoreSessions()" class="session-loading">
+            <text>没有更多了</text>
+          </view>
         </scroll-view>
+      </view>
+    </view>
+
+    <!-- 编辑消息弹窗 -->
+    <view v-if="showEditPopup" class="modal-overlay" @click="showEditPopup = false">
+      <view class="edit-popup" @click.stop>
+        <view class="edit-popup-header">
+          <text class="edit-popup-title">编辑消息</text>
+          <text class="edit-popup-close" @click="showEditPopup = false">✕</text>
+        </view>
+        <textarea
+          v-model="editText"
+          class="edit-textarea"
+          :auto-height="true"
+          :max-height="200"
+          :show-confirm-bar="false"
+          placeholder="修改你的消息..."
+          :placeholder-style="'color: #5a5070; font-size: 28rpx'"
+        />
+        <view class="edit-popup-actions">
+          <view class="edit-cancel-btn" @click="showEditPopup = false">
+            <text>取消</text>
+          </view>
+          <view class="edit-confirm-btn" @click="confirmEdit">
+            <text>重新发送</text>
+          </view>
+        </view>
       </view>
     </view>
 
@@ -343,7 +583,6 @@ async function selectPersonality(code: string) {
           <text class="picker-close" @click="showPersonalityPicker = false">✕</text>
         </view>
 
-        <!-- 女性人格 -->
         <view v-if="femalePersonalities.length > 0" class="gender-group">
           <view class="gender-label">
             <text class="gender-icon">♀</text>
@@ -364,7 +603,6 @@ async function selectPersonality(code: string) {
           </view>
         </view>
 
-        <!-- 男性人格 -->
         <view v-if="malePersonalities.length > 0" class="gender-group">
           <view class="gender-label">
             <text class="gender-icon">♂</text>
@@ -385,8 +623,7 @@ async function selectPersonality(code: string) {
           </view>
         </view>
 
-        <!-- 加载中 -->
-        <view v-if="personalities.length === 0" class="picker-loading">
+        <view v-if="personalityStore.loading" class="picker-loading">
           <text>加载中...</text>
         </view>
       </view>
@@ -443,6 +680,14 @@ async function selectPersonality(code: string) {
   flex: 1;
   padding: 24rpx 24rpx 0;
   overflow: hidden;
+}
+
+/* 加载更多历史消息提示 */
+.load-more-tip {
+  text-align: center;
+  padding: 20rpx 0;
+  color: #5a5070;
+  font-size: 24rpx;
 }
 
 .welcome-area {
@@ -621,9 +866,30 @@ async function selectPersonality(code: string) {
   font-weight: bold;
 }
 
-.loading-dot {
-  animation: pulse 0.8s infinite;
+/* 停止按钮 */
+.stop-btn {
+  background: rgba(220, 80, 80, 0.85);
+  box-shadow: 0 4rpx 16rpx rgba(220, 80, 80, 0.4);
+}
+
+.stop-icon {
+  color: white;
   font-size: 28rpx !important;
+}
+
+/* 用户消息编辑提示图标 */
+.edit-hint {
+  display: inline-block;
+  margin-left: 8rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.5);
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+/* 消息气泡 relative 定位（弹出层等后续需要时备用） */
+.message-bubble {
+  position: relative;
 }
 
 /* 会话侧边面板 */
@@ -647,6 +913,8 @@ async function selectPersonality(code: string) {
   display: flex;
   flex-direction: column;
   padding: 0;
+  /* 必须设置 overflow:hidden，子 scroll-view 才能正确继承 flex 剩余高度 */
+  overflow: hidden;
 }
 
 .session-panel-header {
@@ -690,6 +958,11 @@ async function selectPersonality(code: string) {
 
 .session-list {
   flex: 1;
+  /* 微信小程序中 scroll-view 必须设定明确高度才能滚动；
+     配合父容器 flex: column + overflow:hidden 使用 height:0 + flex:1 */
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .session-item {
@@ -839,6 +1112,85 @@ async function selectPersonality(code: string) {
 .p-desc {
   font-size: 24rpx;
   color: #7a6b9a;
+}
+
+/* 编辑消息弹窗 */
+.edit-popup {
+  background: #1a1a2e;
+  border-top-left-radius: 40rpx;
+  border-top-right-radius: 40rpx;
+  padding: 40rpx 32rpx 80rpx;
+  width: 100%;
+  border: 1rpx solid rgba(184, 158, 232, 0.15);
+}
+
+.edit-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32rpx;
+}
+
+.edit-popup-title {
+  font-size: 34rpx;
+  color: #e8d5ff;
+  font-weight: 600;
+}
+
+.edit-popup-close {
+  font-size: 32rpx;
+  color: #7a6b9a;
+  padding: 8rpx;
+}
+
+.edit-textarea {
+  width: 100%;
+  font-size: 30rpx;
+  color: #e8d5ff;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(184, 158, 232, 0.2);
+  border-radius: 20rpx;
+  padding: 24rpx 28rpx;
+  min-height: 120rpx;
+  margin-bottom: 32rpx;
+}
+
+.edit-popup-actions {
+  display: flex;
+  gap: 24rpx;
+}
+
+.edit-cancel-btn {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 44rpx;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-cancel-btn text {
+  color: #7a6b9a;
+  font-size: 30rpx;
+}
+
+.edit-confirm-btn {
+  flex: 2;
+  height: 88rpx;
+  border-radius: 44rpx;
+  background: linear-gradient(135deg, #b89ee8 0%, #8b6fd1 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 20rpx rgba(139, 111, 209, 0.4);
+}
+
+.edit-confirm-btn text {
+  color: white;
+  font-size: 30rpx;
+  font-weight: 600;
 }
 </style>
 

@@ -3,7 +3,7 @@ import {post} from '../utils/request'
 export interface WxLoginResponse {
   token: string
   userInfo: {
-    id: number
+    id: string   // 后端 Long 序列化为字符串，防止 JS 精度丢失
     nickname: string
     avatar: string | null
     isVip: boolean

@@ -101,7 +101,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         g: common_vendor.t(common_vendor.unref(userStore).isVip ? "已激活" : "立即开通"),
         h: isLoading.value,
         i: isLoading.value || common_vendor.unref(userStore).isVip,
-        j: common_vendor.o(handleBuy, "92")
+        j: common_vendor.o(handleBuy, "53")
       });
     };
   }

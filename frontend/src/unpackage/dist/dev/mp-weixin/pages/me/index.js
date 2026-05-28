@@ -1,12 +1,23 @@
 "use strict";
 const common_vendor = require("../../common/vendor.js");
 const store_user = require("../../store/user.js");
+const store_personality = require("../../store/personality.js");
 const utils_emotion = require("../../utils/emotion.js");
 const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
   __name: "index",
   setup(__props) {
     const userStore = store_user.useUserStore();
-    const personality = common_vendor.computed(() => utils_emotion.getPersonalityInfo(userStore.currentPersonality));
+    const personalityStore = store_personality.usePersonalityStore();
+    common_vendor.onMounted(async () => {
+      await personalityStore.ensureLoaded();
+    });
+    const personality = common_vendor.computed(() => {
+      const found = personalityStore.findByCode(userStore.currentPersonality);
+      if (found) {
+        return { label: found.name, desc: found.description, emoji: found.emoji };
+      }
+      return utils_emotion.getPersonalityInfo(userStore.currentPersonality);
+    });
     function goToVip() {
       common_vendor.index.navigateTo({ url: "/pages/vip/index" });
     }

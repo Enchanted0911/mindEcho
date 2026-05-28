@@ -11,4 +11,5 @@ export { pinia }
 export * from './user'
 export * from './chat'
 export * from './diary'
+export * from './personality'
 
