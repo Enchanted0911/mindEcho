@@ -2,6 +2,7 @@ package com.mindecho.common.config;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.reactive.JdkClientHttpConnector;
@@ -18,9 +19,12 @@ public class SpringAiConfig {
 
     /**
      * 配置 ChatClient Bean
+     * <p>
+     * 容器中同时存在 openAiChatModel（DeepSeek）和 ollamaChatModel（本地 Embedding）两个 ChatModel，
+     * 通过 @Qualifier 明确指定使用 OpenAI/DeepSeek 的 ChatModel。
      */
     @Bean
-    public ChatClient chatClient(ChatModel chatModel) {
+    public ChatClient chatClient(@Qualifier("openAiChatModel") ChatModel chatModel) {
         return ChatClient.builder(chatModel)
                 .build();
     }

@@ -5,13 +5,13 @@ package com.mindecho.common.util;
  */
 public class UserContext {
 
-    private static final ThreadLocal<Long> USER_ID_HOLDER = new ThreadLocal<>();
+    private static final ThreadLocal<String> USER_ID_HOLDER = new ThreadLocal<>();
 
-    public static void setUserId(Long userId) {
+    public static void setUserId(String userId) {
         USER_ID_HOLDER.set(userId);
     }
 
-    public static Long getUserId() {
+    public static String getUserId() {
         return USER_ID_HOLDER.get();
     }
 

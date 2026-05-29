@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 会员订单实体
@@ -13,12 +13,12 @@ import java.time.LocalDateTime;
 @TableName("vip_order")
 public class VipOrder {
 
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
+    @TableId(type = IdType.ASSIGN_UUID)
+    private String id;
 
     /** 用户ID */
     @TableField("user_id")
-    private Long userId;
+    private String userId;
 
     /** 订单号 */
     @TableField("order_no")
@@ -36,9 +36,9 @@ public class VipOrder {
     @TableField("vip_type")
     private String vipType;
 
-    /** VIP 到期时间 */
+    /** VIP 到期时间（带时区） */
     @TableField("expire_time")
-    private LocalDateTime expireTime;
+    private OffsetDateTime expireTime;
 
     /** 微信支付 prepay_id */
     @TableField("prepay_id")
@@ -53,12 +53,12 @@ public class VipOrder {
     @TableField("deleted")
     private Integer deleted;
 
-    /** 创建时间 */
+    /** 创建时间（带时区） */
     @TableField(value = "created_time", fill = FieldFill.INSERT)
-    private LocalDateTime createdTime;
+    private OffsetDateTime createdTime;
 
-    /** 更新时间 */
+    /** 更新时间（带时区） */
     @TableField(value = "updated_time", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedTime;
+    private OffsetDateTime updatedTime;
 }
 

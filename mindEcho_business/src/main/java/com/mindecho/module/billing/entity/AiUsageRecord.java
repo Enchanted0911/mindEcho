@@ -3,7 +3,7 @@ package com.mindecho.module.billing.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * AI 使用量记录实体
@@ -16,8 +16,8 @@ import java.time.LocalDateTime;
 @TableName("ai_usage_record")
 public class AiUsageRecord {
 
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
+    @TableId(type = IdType.ASSIGN_UUID)
+    private String id;
 
     /** 请求唯一ID（幂等键，防止重复结算） */
     @TableField("request_id")
@@ -25,11 +25,11 @@ public class AiUsageRecord {
 
     /** 用户ID */
     @TableField("user_id")
-    private Long userId;
+    private String userId;
 
     /** 关联会话ID（chat_session.id，非聊天业务可为空） */
     @TableField("session_id")
-    private Long sessionId;
+    private String sessionId;
 
     /**
      * 业务类型：CHAT / ASTROLOGY_NATAL / ASTROLOGY_SYNASTRY / ASTROLOGY_TRANSIT / EMOTION_ANALYZE
@@ -92,12 +92,12 @@ public class AiUsageRecord {
     @TableField("streaming_interrupted")
     private Boolean streamingInterrupted;
 
-    /** 创建时间 */
+    /** 创建时间（带时区） */
     @TableField(value = "created_time", fill = FieldFill.INSERT)
-    private LocalDateTime createdTime;
+    private OffsetDateTime createdTime;
 
-    /** 更新时间 */
+    /** 更新时间（带时区） */
     @TableField(value = "updated_time", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedTime;
+    private OffsetDateTime updatedTime;
 }
 

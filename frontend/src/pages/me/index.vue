@@ -26,6 +26,22 @@ function goToVip() {
   uni.navigateTo({ url: '/pages/vip/index' })
 }
 
+function handleNotification() {
+  uni.showToast({ title: '通知设置即将上线', icon: 'none' })
+}
+
+function handlePrivacy() {
+  uni.showToast({ title: '隐私设置即将上线', icon: 'none' })
+}
+
+function handleHelp() {
+  uni.showToast({ title: '如有问题请联系客服', icon: 'none' })
+}
+
+function handleAgreement() {
+  uni.showToast({ title: '正在加载用户协议...', icon: 'none' })
+}
+
 function handleLogout() {
   uni.showModal({
     title: '退出登录',
@@ -116,22 +132,22 @@ function handleLogout() {
             <text class="menu-text">开通会员</text>
             <text class="menu-arrow">›</text>
           </view>
-          <view class="menu-item">
+          <view class="menu-item" @click="handleNotification">
             <text class="menu-icon">🔔</text>
             <text class="menu-text">消息通知</text>
             <text class="menu-arrow">›</text>
           </view>
-          <view class="menu-item">
+          <view class="menu-item" @click="handlePrivacy">
             <text class="menu-icon">🛡️</text>
             <text class="menu-text">隐私设置</text>
             <text class="menu-arrow">›</text>
           </view>
-          <view class="menu-item">
+          <view class="menu-item" @click="handleHelp">
             <text class="menu-icon">❓</text>
             <text class="menu-text">帮助与反馈</text>
             <text class="menu-arrow">›</text>
           </view>
-          <view class="menu-item">
+          <view class="menu-item" @click="handleAgreement">
             <text class="menu-icon">📄</text>
             <text class="menu-text">用户协议</text>
             <text class="menu-arrow">›</text>

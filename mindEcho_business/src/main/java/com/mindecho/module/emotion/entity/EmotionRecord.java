@@ -3,7 +3,7 @@ package com.mindecho.module.emotion.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 情绪记录实体
@@ -12,12 +12,12 @@ import java.time.LocalDateTime;
 @TableName("emotion_record")
 public class EmotionRecord {
 
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
+    @TableId(type = IdType.ASSIGN_UUID)
+    private String id;
 
     /** 用户ID */
     @TableField("user_id")
-    private Long userId;
+    private String userId;
 
     /** 情绪类型 */
     @TableField("emotion")
@@ -36,8 +36,8 @@ public class EmotionRecord {
     @TableField("deleted")
     private Integer deleted;
 
-    /** 创建时间 */
+    /** 创建时间（带时区） */
     @TableField(value = "created_time", fill = FieldFill.INSERT)
-    private LocalDateTime createdTime;
+    private OffsetDateTime createdTime;
 }
 

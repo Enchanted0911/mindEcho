@@ -3,7 +3,7 @@ package com.mindecho.module.chat.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 聊天消息实体
@@ -12,16 +12,16 @@ import java.time.LocalDateTime;
 @TableName("chat_message")
 public class ChatMessage {
 
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
+    @TableId(type = IdType.ASSIGN_UUID)
+    private String id;
 
     /** 会话ID */
     @TableField("session_id")
-    private Long sessionId;
+    private String sessionId;
 
     /** 用户ID */
     @TableField("user_id")
-    private Long userId;
+    private String userId;
 
     /** 角色：user / assistant */
     @TableField("role")
@@ -48,8 +48,8 @@ public class ChatMessage {
     @TableField("deleted")
     private Integer deleted;
 
-    /** 创建时间 */
+    /** 创建时间（带时区） */
     @TableField(value = "created_time", fill = FieldFill.INSERT)
-    private LocalDateTime createdTime;
+    private OffsetDateTime createdTime;
 }
 

@@ -138,19 +138,30 @@ export const useChatStore = defineStore('chat', () => {
 
   /**
    * 用真实消息列表替换消息尾部（SSE 完成后刷新时使用）
-   * 保留早于最早真实消息的历史记录，用新消息列表替换其余部分
+   *
+   * 策略：
+   * 1. 在当前列表中找到第一条"本地临时消息"（以 user_、ai_、ai_edit_ 开头的 ID）的位置
+   * 2. 保留该位置之前的所有已持久化历史消息
+   * 3. 用新真实消息替换该位置及之后的内容
+   * 4. 如果 newMsgs 中包含与旧历史重叠的 ID，则去重保留旧历史
    */
   function replaceTrailingMessages(newMsgs: ChatMessage[], newPage: number, newTotalPages: number) {
     if (newMsgs.length === 0) return
-    const firstRealId = newMsgs[0]?.id
-    // 找到当前列表中第一个已有真实 ID（数字字符串）且与新数据对应的切割点
-    const cutIdx = messages.value.findIndex(
-      m => m.id === firstRealId || (!m.id.startsWith('user_') && !m.id.startsWith('ai_') && !m.id.startsWith('ai_edit_'))
-    )
+
+    // 找到第一条本地临时消息的位置（这是"尾部可替换区域"的起点）
+    const tempPrefixes = ['user_', 'ai_', 'ai_edit_']
+    const isTempId = (id: string) => tempPrefixes.some(p => id.startsWith(p))
+
+    const cutIdx = messages.value.findIndex(m => isTempId(m.id))
+
+    // cutIdx === -1：列表中没有临时消息，说明全是持久化消息，直接追加去重
+    // cutIdx === 0：从头开始全是临时消息，olderMsgs 为空
+    // cutIdx > 0：保留前 cutIdx 条持久化历史
     const olderMsgs = cutIdx > 0 ? messages.value.slice(0, cutIdx) : []
-    // 合并旧历史 + 新真实消息，去重
-    const existingIds = new Set(newMsgs.map(m => m.id))
-    const deduped = olderMsgs.filter(m => !existingIds.has(m.id))
+
+    // 合并旧历史 + 新真实消息，确保旧历史与新消息去重（以新消息 ID 为准）
+    const newIds = new Set(newMsgs.map(m => m.id))
+    const deduped = olderMsgs.filter(m => !newIds.has(m.id))
     messages.value = [...deduped, ...newMsgs]
     msgPage.value = newPage
     msgTotalPages.value = newTotalPages

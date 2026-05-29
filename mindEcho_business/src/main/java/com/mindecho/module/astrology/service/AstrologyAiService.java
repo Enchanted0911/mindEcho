@@ -8,7 +8,6 @@ import com.mindecho.module.astrology.memory.AstrologyMemoryService;
 import com.mindecho.module.astrology.prompt.AstrologerPromptBuilder;
 import com.mindecho.module.billing.entity.AiUsageRecord;
 import com.mindecho.module.billing.service.BillingService;
-import com.mindecho.module.memory.entity.Memory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -81,7 +80,7 @@ public class AstrologyAiService {
      * @param request 解读请求（含 chart 数据、focus、tone）
      * @return AI 占星解读结果
      */
-    public AstrologyInterpretResponseDTO interpretNatal(Long userId, AstrologyInterpretRequestDTO request) {
+    public AstrologyInterpretResponseDTO interpretNatal(String userId, AstrologyInterpretRequestDTO request) {
         log.info("Interpreting natal chart: userId={}, focus={}", userId, request.getFocus());
 
         // Step 1: RAG 检索
@@ -89,8 +88,8 @@ public class AstrologyAiService {
         String ragContent = queryRagWithCache(ragQuery);
         boolean ragFused = StringUtils.hasText(ragContent);
 
-        // Step 2: Memory 检索
-        List<Memory> memories = astrologyMemoryService.recallForNatal(userId);
+        // Step 2: Memory 检索（pgvector 语义检索，query 使用 RAG query 兜底）
+        List<String> memories = astrologyMemoryService.recallForNatal(userId, ragQuery);
         boolean memoryFused = !memories.isEmpty();
 
         // Step 3: 构建 Prompt
@@ -109,8 +108,11 @@ public class AstrologyAiService {
         // Step 6: 积分结算
         settleBillingQuietly(usageRecord, userId, result);
 
-        // Step 7: 异步保存解读历史
+        // Step 7: 异步保存解读历史到向量记忆（astrology_history 类型）
         saveHistoryAsync(userId, "NATAL", result.content, request.getFocus());
+        // Step 8: 异步从解读结果中提取并保存情绪特征（emotion 类型）
+        astrologyMemoryService.extractAndSaveInterpretationEmotionAsync(
+                userId, "NATAL", result.content, request.getFocus());
 
         return AstrologyInterpretResponseDTO.builder()
                 .interpretation(result.content)
@@ -130,14 +132,14 @@ public class AstrologyAiService {
      * @param request 解读请求
      * @return AI 占星解读结果
      */
-    public AstrologyInterpretResponseDTO interpretSynastry(Long userId, AstrologyInterpretRequestDTO request) {
+    public AstrologyInterpretResponseDTO interpretSynastry(String userId, AstrologyInterpretRequestDTO request) {
         log.info("Interpreting synastry chart: userId={}, focus={}", userId, request.getFocus());
 
         String ragQuery = buildSynastryRagQuery(request.getChart(), request.getFocus());
         String ragContent = queryRagWithCache(ragQuery);
         boolean ragFused = StringUtils.hasText(ragContent);
 
-        List<Memory> memories = astrologyMemoryService.recallForSynastry(userId);
+        List<String> memories = astrologyMemoryService.recallForSynastry(userId, ragQuery);
         boolean memoryFused = !memories.isEmpty();
 
         String partnerName = extractPartnerName(request.getExtraContext());
@@ -157,6 +159,10 @@ public class AstrologyAiService {
         settleBillingQuietly(usageRecord, userId, result);
 
         saveHistoryAsync(userId, "SYNASTRY", result.content, request.getFocus());
+        // 和盘解读：额外保存关系记录到向量记忆（relationship 类型）
+        // 从解读内容中提取关系主题并保存
+        astrologyMemoryService.extractAndSaveRelationshipFromInterpretAsync(
+                userId, partnerName, relationshipType, result.content);
 
         return AstrologyInterpretResponseDTO.builder()
                 .interpretation(result.content)
@@ -176,14 +182,14 @@ public class AstrologyAiService {
      * @param request 解读请求
      * @return AI 占星解读结果
      */
-    public AstrologyInterpretResponseDTO interpretTransit(Long userId, AstrologyInterpretRequestDTO request) {
+    public AstrologyInterpretResponseDTO interpretTransit(String userId, AstrologyInterpretRequestDTO request) {
         log.info("Interpreting transit chart: userId={}, focus={}", userId, request.getFocus());
 
         String ragQuery = buildTransitRagQuery(request.getChart(), request.getFocus());
         String ragContent = queryRagWithCache(ragQuery);
         boolean ragFused = StringUtils.hasText(ragContent);
 
-        List<Memory> memories = astrologyMemoryService.recallForTransit(userId);
+        List<String> memories = astrologyMemoryService.recallForTransit(userId, ragQuery);
         boolean memoryFused = !memories.isEmpty();
 
         String targetDate = request.getExtraContext();
@@ -201,6 +207,9 @@ public class AstrologyAiService {
         settleBillingQuietly(usageRecord, userId, result);
 
         saveHistoryAsync(userId, "TRANSIT", result.content, request.getFocus());
+        // 流运解读：提取近期情绪倾向写入向量记忆（emotion 类型）
+        astrologyMemoryService.extractAndSaveInterpretationEmotionAsync(
+                userId, "TRANSIT", result.content, request.getFocus());
 
         return AstrologyInterpretResponseDTO.builder()
                 .interpretation(result.content)
@@ -269,7 +278,7 @@ public class AstrologyAiService {
      * 初始化计费（安静模式：异常时不抛出，仅记录日志）
      * 占星场景下计费失败不应阻断业务
      */
-    private AiUsageRecord initBillingQuietly(Long userId, String businessType, int estimatedTokens) {
+    private AiUsageRecord initBillingQuietly(String userId, String businessType, int estimatedTokens) {
         try {
             return billingService.initUsageAndPreDeduct(userId, null, businessType, estimatedTokens);
         } catch (com.mindecho.common.exception.BusinessException e) {
@@ -284,7 +293,7 @@ public class AstrologyAiService {
     /**
      * 结算计费（安静模式）
      */
-    private void settleBillingQuietly(AiUsageRecord usageRecord, Long userId, LlmResult result) {
+    private void settleBillingQuietly(AiUsageRecord usageRecord, String userId, LlmResult result) {
         if (usageRecord == null) return;
         try {
             if (result.failed) {
@@ -365,7 +374,7 @@ public class AstrologyAiService {
 
     // ─────────────────────── 异步 Memory 写入 ─────────────────────────────
 
-    private void saveHistoryAsync(Long userId, String interpretType,
+    private void saveHistoryAsync(String userId, String interpretType,
                                   String interpretation, String focus) {
         astrologyMemoryService.saveInterpretationHistoryAsync(userId, interpretType, interpretation, focus);
     }

@@ -4,7 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 积分充值订单 DTO
@@ -13,13 +13,14 @@ import java.time.LocalDateTime;
 @Builder
 public class PointOrderDTO {
 
-    private Long id;
+    private String id;
     private String orderNo;
     private BigDecimal amount;
     private Long points;
     private String packageType;
     private String status;
-    private LocalDateTime createdTime;
+    /** 创建时间（ISO-8601 带时区） */
+    private OffsetDateTime createdTime;
 
     /** 微信支付唤起参数（前端调用 uni.requestPayment 使用） */
     private VipOrderDTO.WxPayParams wxPayParams;

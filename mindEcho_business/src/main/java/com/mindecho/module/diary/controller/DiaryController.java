@@ -30,7 +30,7 @@ public class DiaryController {
      */
     @PostMapping("/save")
     public Result<DiaryEntryDTO> saveDiary(@Valid @RequestBody SaveDiaryRequest request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         return Result.success(diaryService.saveDiary(userId, request));
     }
 
@@ -42,7 +42,7 @@ public class DiaryController {
     public Result<IPage<DiaryEntryDTO>> getDiaryList(
             @RequestParam(name = "page", defaultValue = "1") Integer page,
             @RequestParam(name = "size", defaultValue = "20") Integer size) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         return Result.success(diaryService.getDiaryList(userId, page, size));
     }
 
@@ -53,7 +53,7 @@ public class DiaryController {
     @GetMapping("/date/{date}")
     public Result<DiaryEntryDTO> getDiaryByDate(
             @PathVariable("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         DiaryEntryDTO diary = diaryService.getDiaryByDate(userId, date);
         return Result.success(diary);
     }
@@ -63,8 +63,8 @@ public class DiaryController {
      * GET /api/diary/{id}/ai-summary
      */
     @GetMapping("/{id}/ai-summary")
-    public Result<DiaryEntryDTO> getAiSummary(@PathVariable("id") Long id) {
-        Long userId = UserContext.getUserId();
+    public Result<DiaryEntryDTO> getAiSummary(@PathVariable("id") String id) {
+        String userId = UserContext.getUserId();
         DiaryEntryDTO dto = diaryService.getAiSummary(userId, id);
         if (dto == null) {
             return Result.error(ResultCode.DIARY_NOT_FOUND);

@@ -31,7 +31,7 @@ public class BillingQueryService {
     /**
      * 查询用户积分账户信息
      */
-    public PointAccountDTO getAccountInfo(Long userId) {
+    public PointAccountDTO getAccountInfo(String userId) {
         UserPointAccount account = pointAccountService.getAccount(userId);
         return PointAccountDTO.builder()
                 .balance(account.getBalance())
@@ -46,7 +46,7 @@ public class BillingQueryService {
     /**
      * 分页查询积分流水（全部类型）
      */
-    public IPage<TransactionRecordDTO> getTransactionList(Long userId, Integer page, Integer size) {
+    public IPage<TransactionRecordDTO> getTransactionList(String userId, Integer page, Integer size) {
         Page<PointTransaction> pageParam = new Page<>(page, size);
         IPage<PointTransaction> txPage = transactionMapper.selectPage(pageParam,
                 new LambdaQueryWrapper<PointTransaction>()
@@ -59,7 +59,7 @@ public class BillingQueryService {
     /**
      * 分页查询充值流水
      */
-    public IPage<TransactionRecordDTO> getRechargeList(Long userId, Integer page, Integer size) {
+    public IPage<TransactionRecordDTO> getRechargeList(String userId, Integer page, Integer size) {
         Page<PointTransaction> pageParam = new Page<>(page, size);
         IPage<PointTransaction> txPage = transactionMapper.selectPage(pageParam,
                 new LambdaQueryWrapper<PointTransaction>()
@@ -73,7 +73,7 @@ public class BillingQueryService {
     /**
      * 分页查询消费流水（CONSUME 类型）
      */
-    public IPage<TransactionRecordDTO> getConsumeList(Long userId, Integer page, Integer size) {
+    public IPage<TransactionRecordDTO> getConsumeList(String userId, Integer page, Integer size) {
         Page<PointTransaction> pageParam = new Page<>(page, size);
         IPage<PointTransaction> txPage = transactionMapper.selectPage(pageParam,
                 new LambdaQueryWrapper<PointTransaction>()
@@ -87,7 +87,7 @@ public class BillingQueryService {
     /**
      * 分页查询 AI 使用量记录（含消费详情）
      */
-    public IPage<UsageRecordDTO> getUsageList(Long userId, Integer page, Integer size) {
+    public IPage<UsageRecordDTO> getUsageList(String userId, Integer page, Integer size) {
         Page<AiUsageRecord> pageParam = new Page<>(page, size);
         IPage<AiUsageRecord> usagePage = usageRecordMapper.selectPage(pageParam,
                 new LambdaQueryWrapper<AiUsageRecord>()

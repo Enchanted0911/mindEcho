@@ -3,7 +3,8 @@ package com.mindecho.module.auth.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 
 /**
  * 用户实体
@@ -12,8 +13,8 @@ import java.time.LocalDateTime;
 @TableName("user")
 public class User {
 
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
+    @TableId(type = IdType.ASSIGN_UUID)
+    private String id;
 
     /** 微信 openid */
     @TableField("openid")
@@ -27,9 +28,9 @@ public class User {
     @TableField("avatar")
     private String avatar;
 
-    /** VIP 到期时间 */
+    /** VIP 到期时间（带时区） */
     @TableField("vip_expire_time")
-    private LocalDateTime vipExpireTime;
+    private OffsetDateTime vipExpireTime;
 
     /** 当前使用的 AI 人格 */
     @TableField("ai_personality")
@@ -56,19 +57,20 @@ public class User {
     @TableField("deleted")
     private Integer deleted;
 
-    /** 创建时间 */
+    /** 创建时间（带时区） */
     @TableField(value = "created_time", fill = FieldFill.INSERT)
-    private LocalDateTime createdTime;
+    private OffsetDateTime createdTime;
 
-    /** 更新时间 */
+    /** 更新时间（带时区） */
     @TableField(value = "updated_time", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedTime;
+    private OffsetDateTime updatedTime;
 
     /**
-     * 是否是 VIP
+     * 是否是 VIP（与服务器当前时区一致地比较）
      */
     public boolean isVip() {
-        return vipExpireTime != null && vipExpireTime.isAfter(LocalDateTime.now());
+        return vipExpireTime != null
+                && vipExpireTime.isAfter(OffsetDateTime.now(ZoneId.of("Asia/Shanghai")));
     }
 }
 

@@ -49,7 +49,7 @@ public class PointAccountService {
      * 初始赠送 newUserGiftPoints 积分
      */
     @Transactional
-    public UserPointAccount getOrCreateAccount(Long userId) {
+    public UserPointAccount getOrCreateAccount(String userId) {
         UserPointAccount account = findByUserId(userId);
         if (account != null) {
             return account;
@@ -80,7 +80,7 @@ public class PointAccountService {
     /**
      * 查询账户（不存在时自动创建）
      */
-    public UserPointAccount getAccount(Long userId) {
+    public UserPointAccount getAccount(String userId) {
         UserPointAccount account = findByUserId(userId);
         if (account == null) {
             return getOrCreateAccount(userId);
@@ -93,18 +93,12 @@ public class PointAccountService {
     /**
      * 预扣积分（发起 AI 请求前调用）
      *
-     * <p>流程：
-     * 1. 校验余额是否足够
-     * 2. 更新账户（balance - amount, frozen + amount）
-     * 3. 写 PRE_DEDUCT 流水
-     * 4. 更新 ai_usage_record 状态为 PRE_DEDUCTED
-     *
-     * @param userId          用户ID
+     * @param userId          用户ID（UUID 字符串）
      * @param preDeductAmount 预扣积分数（含安全缓冲）
-     * @param usageRecordId   ai_usage_record.id
+     * @param usageRecordId   ai_usage_record.id（UUID 字符串）
      */
     @Transactional
-    public void preDeduct(Long userId, long preDeductAmount, Long usageRecordId) {
+    public void preDeduct(String userId, long preDeductAmount, String usageRecordId) {
         if (!billingConfig.isBillingEnabled()) {
             return;
         }
@@ -122,24 +116,21 @@ public class PointAccountService {
 
         long beforeBalance = account.getBalance();
 
-        // 原子更新：balance -= amount, frozen_balance += amount, WHERE balance >= amount
         int rows = accountMapper.update(null,
                 new UpdateWrapper<UserPointAccount>()
-                        .setSql("balance = balance - " + preDeductAmount)
-                        .setSql("frozen_balance = frozen_balance + " + preDeductAmount)
-                        .setSql("updated_time = NOW()")
+                        .setSql("balance = balance - " + preDeductAmount
+                                + ", frozen_balance = frozen_balance + " + preDeductAmount
+                                + ", updated_time = CURRENT_TIMESTAMP")
                         .eq("user_id", userId)
                         .ge("balance", preDeductAmount)
                         .eq("deleted", 0)
         );
 
         if (rows == 0) {
-            // 并发场景下余额变化导致更新失败
             log.warn("PreDeduct failed (concurrent conflict): userId={}, amount={}", userId, preDeductAmount);
             throw new BusinessException(ResultCode.INSUFFICIENT_POINTS);
         }
 
-        // 写流水
         recordTransaction(userId, -preDeductAmount,
                 TransactionTypeEnum.PRE_DEDUCT,
                 beforeBalance, beforeBalance - preDeductAmount,
@@ -153,17 +144,13 @@ public class PointAccountService {
     /**
      * 最终结算（AI 完成后调用）
      *
-     * <p>结算规则：
-     * - 实际费用 < 预扣：消费实际费用，退回差额
-     * - 实际费用 > 预扣：先结算预扣部分，再从可用余额补扣差额（允许透支一次）
-     *
-     * @param userId        用户ID
+     * @param userId        用户ID（UUID 字符串）
      * @param frozenAmount  预扣冻结积分数
      * @param actualAmount  实际消费积分数
-     * @param usageRecordId ai_usage_record.id
+     * @param usageRecordId ai_usage_record.id（UUID 字符串）
      */
     @Transactional
-    public void settle(Long userId, long frozenAmount, long actualAmount, Long usageRecordId) {
+    public void settle(String userId, long frozenAmount, long actualAmount, String usageRecordId) {
         if (!billingConfig.isBillingEnabled()) {
             return;
         }
@@ -175,16 +162,14 @@ public class PointAccountService {
         }
 
         if (actualAmount <= frozenAmount) {
-            // 正常结算：实际 <= 预扣
-            // frozen_balance -= frozenAmount, balance += (frozenAmount - actualAmount), total_consume += actualAmount, total_refund += refund
             long refundAmount = frozenAmount - actualAmount;
             int rows = accountMapper.update(null,
                     new UpdateWrapper<UserPointAccount>()
-                            .setSql("frozen_balance = frozen_balance - " + frozenAmount)
-                            .setSql("balance = balance + " + refundAmount)
-                            .setSql("total_consume = total_consume + " + actualAmount)
-                            .setSql("total_refund = total_refund + " + refundAmount)
-                            .setSql("updated_time = NOW()")
+                            .setSql("frozen_balance = frozen_balance - " + frozenAmount
+                                    + ", balance = balance + " + refundAmount
+                                    + ", total_consume = total_consume + " + actualAmount
+                                    + ", total_refund = total_refund + " + refundAmount
+                                    + ", updated_time = CURRENT_TIMESTAMP")
                             .eq("user_id", userId)
                             .ge("frozen_balance", frozenAmount)
                             .eq("deleted", 0)
@@ -196,14 +181,12 @@ public class PointAccountService {
             }
             long beforeBalance = account.getBalance();
 
-            // 写消费流水
             if (actualAmount > 0) {
                 recordTransaction(userId, -actualAmount, TransactionTypeEnum.CONSUME,
                         beforeBalance, beforeBalance - actualAmount + refundAmount,
                         usageRecordId, "AI消费结算");
             }
 
-            // 写退回流水
             if (refundAmount > 0) {
                 recordTransaction(userId, refundAmount, TransactionTypeEnum.REFUND,
                         beforeBalance, beforeBalance + refundAmount - actualAmount,
@@ -213,24 +196,21 @@ public class PointAccountService {
             log.info("Settle success: userId={}, frozen={}, actual={}, refund={}",
                     userId, frozenAmount, actualAmount, refundAmount);
         } else {
-            // 超出预扣：先结算预扣，再补扣
             long extraAmount = actualAmount - frozenAmount;
-            // 先清零冻结
             accountMapper.update(null,
                     new UpdateWrapper<UserPointAccount>()
-                            .setSql("frozen_balance = frozen_balance - " + frozenAmount)
-                            .setSql("total_consume = total_consume + " + frozenAmount)
-                            .setSql("updated_time = NOW()")
+                            .setSql("frozen_balance = frozen_balance - " + frozenAmount
+                                    + ", total_consume = total_consume + " + frozenAmount
+                                    + ", updated_time = CURRENT_TIMESTAMP")
                             .eq("user_id", userId)
                             .ge("frozen_balance", frozenAmount)
                             .eq("deleted", 0)
             );
-            // 再从可用余额补扣（允许透支）
             accountMapper.update(null,
                     new UpdateWrapper<UserPointAccount>()
-                            .setSql("balance = balance - " + extraAmount)
-                            .setSql("total_consume = total_consume + " + extraAmount)
-                            .setSql("updated_time = NOW()")
+                            .setSql("balance = balance - " + extraAmount
+                                    + ", total_consume = total_consume + " + extraAmount
+                                    + ", updated_time = CURRENT_TIMESTAMP")
                             .eq("user_id", userId)
                             .eq("deleted", 0)
             );
@@ -250,12 +230,12 @@ public class PointAccountService {
     /**
      * 全额退回冻结积分（AI 失败或未产生内容时）
      *
-     * @param userId        用户ID
+     * @param userId        用户ID（UUID 字符串）
      * @param frozenAmount  需退回的冻结积分
-     * @param usageRecordId ai_usage_record.id
+     * @param usageRecordId ai_usage_record.id（UUID 字符串）
      */
     @Transactional
-    public void refundFrozen(Long userId, long frozenAmount, Long usageRecordId) {
+    public void refundFrozen(String userId, long frozenAmount, String usageRecordId) {
         if (!billingConfig.isBillingEnabled() || frozenAmount <= 0) {
             return;
         }
@@ -265,10 +245,10 @@ public class PointAccountService {
 
         int rows = accountMapper.update(null,
                 new UpdateWrapper<UserPointAccount>()
-                        .setSql("balance = balance + " + frozenAmount)
-                        .setSql("frozen_balance = frozen_balance - " + frozenAmount)
-                        .setSql("total_refund = total_refund + " + frozenAmount)
-                        .setSql("updated_time = NOW()")
+                        .setSql("balance = balance + " + frozenAmount
+                                + ", frozen_balance = frozen_balance - " + frozenAmount
+                                + ", total_refund = total_refund + " + frozenAmount
+                                + ", updated_time = CURRENT_TIMESTAMP")
                         .eq("user_id", userId)
                         .ge("frozen_balance", frozenAmount)
                         .eq("deleted", 0)
@@ -292,19 +272,19 @@ public class PointAccountService {
     /**
      * 积分充值（支付成功后调用）
      *
-     * @param userId     用户ID
+     * @param userId     用户ID（UUID 字符串）
      * @param amount     充值积分数
-     * @param businessId 充值订单ID（point_order.id）
+     * @param businessId 充值订单ID（UUID 字符串）
      * @param remark     备注
      */
     @Transactional
-    public void recharge(Long userId, long amount, Long businessId, String remark) {
+    public void recharge(String userId, long amount, String businessId, String remark) {
         UserPointAccount account = getAccount(userId);
         int rows = accountMapper.update(null,
                 new UpdateWrapper<UserPointAccount>()
-                        .setSql("balance = balance + " + amount)
-                        .setSql("total_recharge = total_recharge + " + amount)
-                        .setSql("updated_time = NOW()")
+                        .setSql("balance = balance + " + amount
+                                + ", total_recharge = total_recharge + " + amount
+                                + ", updated_time = CURRENT_TIMESTAMP")
                         .eq("user_id", userId)
                         .eq("deleted", 0)
         );
@@ -325,13 +305,13 @@ public class PointAccountService {
      * 系统赠送积分
      */
     @Transactional
-    public void gift(Long userId, long amount, String remark) {
+    public void gift(String userId, long amount, String remark) {
         UserPointAccount account = getAccount(userId);
         int rows = accountMapper.update(null,
                 new UpdateWrapper<UserPointAccount>()
-                        .setSql("balance = balance + " + amount)
-                        .setSql("total_gift = total_gift + " + amount)
-                        .setSql("updated_time = NOW()")
+                        .setSql("balance = balance + " + amount
+                                + ", total_gift = total_gift + " + amount
+                                + ", updated_time = CURRENT_TIMESTAMP")
                         .eq("user_id", userId)
                         .eq("deleted", 0)
         );
@@ -351,7 +331,7 @@ public class PointAccountService {
     /**
      * 根据用户 ID 查询账户
      */
-    private UserPointAccount findByUserId(Long userId) {
+    private UserPointAccount findByUserId(String userId) {
         return accountMapper.selectOne(
                 new LambdaQueryWrapper<UserPointAccount>()
                         .eq(UserPointAccount::getUserId, userId)
@@ -362,9 +342,9 @@ public class PointAccountService {
     /**
      * 写积分流水记录
      */
-    private void recordTransaction(Long userId, long amount, TransactionTypeEnum type,
+    private void recordTransaction(String userId, long amount, TransactionTypeEnum type,
                                     long beforeBalance, long afterBalance,
-                                    Long businessId, String remark) {
+                                    String businessId, String remark) {
         PointTransaction tx = new PointTransaction();
         tx.setTransactionNo(generateTransactionNo());
         tx.setUserId(userId);

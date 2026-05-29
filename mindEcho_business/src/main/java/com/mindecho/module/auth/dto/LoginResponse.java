@@ -26,7 +26,7 @@ public class LoginResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class UserInfoDTO {
-        private Long id;
+        private String id;
         private String nickname;
         private String avatar;
         /**

@@ -48,7 +48,7 @@ public class AstrologyController {
      */
     @PostMapping("/natal")
     public Result<NatalChartResponseDTO> calculateNatal(@Valid @RequestBody NatalRequestDTO request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         log.info("Calculate natal chart: userId={}, city={}", userId, request.getBirthInfo().getCity());
         NatalChartResponseDTO result = gatewayService.getNatalChart(userId, request);
         return Result.success(result);
@@ -65,7 +65,7 @@ public class AstrologyController {
     @PostMapping("/natal/interpret")
     public Result<AstrologyInterpretResponseDTO> interpretNatal(
             @Valid @RequestBody AstrologyInterpretRequestDTO request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         log.info("Interpret natal chart: userId={}, focus={}", userId, request.getFocus());
         request.setInterpretType("NATAL");
         AstrologyInterpretResponseDTO result = aiService.interpretNatal(userId, request);
@@ -79,7 +79,7 @@ public class AstrologyController {
      */
     @GetMapping("/natal/check")
     public Result<Boolean> checkNatalChart() {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         boolean hasChart = gatewayService.hasNatalChart(userId);
         return Result.success(hasChart);
     }
@@ -93,7 +93,7 @@ public class AstrologyController {
      */
     @DeleteMapping("/natal/cache")
     public Result<NatalChartResponseDTO> refreshNatalChart(@Valid @RequestBody NatalRequestDTO request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         log.info("Refresh natal chart: userId={}", userId);
         NatalChartResponseDTO result = gatewayService.refreshNatalChart(userId, request);
         return Result.success("本命盘已重新计算", result);
@@ -108,7 +108,7 @@ public class AstrologyController {
      */
     @PostMapping("/synastry")
     public Result<SynastryResponseDTO> calculateSynastry(@Valid @RequestBody SynastryRequestDTO request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         log.info("Calculate synastry: userId={}, partner={}", userId, request.getPartnerName());
         SynastryResponseDTO result = gatewayService.getSynastryChart(userId, request);
         return Result.success(result);
@@ -125,7 +125,7 @@ public class AstrologyController {
     @PostMapping("/synastry/interpret")
     public Result<AstrologyInterpretResponseDTO> interpretSynastry(
             @Valid @RequestBody AstrologyInterpretRequestDTO request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         log.info("Interpret synastry chart: userId={}, focus={}", userId, request.getFocus());
         request.setInterpretType("SYNASTRY");
         AstrologyInterpretResponseDTO result = aiService.interpretSynastry(userId, request);
@@ -141,7 +141,7 @@ public class AstrologyController {
      */
     @PostMapping("/transit")
     public Result<TransitResponseDTO> calculateTransit(@Valid @RequestBody TransitRequestDTO request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         log.info("Calculate transit: userId={}, targetDate={}", userId, request.getTargetDate());
         TransitResponseDTO result = gatewayService.getTransitChart(userId, request);
         return Result.success(result);
@@ -158,7 +158,7 @@ public class AstrologyController {
     @PostMapping("/transit/interpret")
     public Result<AstrologyInterpretResponseDTO> interpretTransit(
             @Valid @RequestBody AstrologyInterpretRequestDTO request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         log.info("Interpret transit chart: userId={}, focus={}", userId, request.getFocus());
         request.setInterpretType("TRANSIT");
         AstrologyInterpretResponseDTO result = aiService.interpretTransit(userId, request);

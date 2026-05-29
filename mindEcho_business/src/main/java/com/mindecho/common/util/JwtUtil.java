@@ -1,6 +1,9 @@
 package com.mindecho.common.util;
 
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,14 +27,14 @@ public class JwtUtil {
     private Long expire;
 
     /**
-     * 生成 JWT Token
+     * 生成 JWT Token（userId 为 UUID 字符串）
      */
-    public String generateToken(Long userId) {
+    public String generateToken(String userId) {
         Date now = new Date();
         Date expireDate = new Date(now.getTime() + expire * 1000);
 
         return Jwts.builder()
-                .subject(String.valueOf(userId))
+                .subject(userId)
                 .issuedAt(now)
                 .expiration(expireDate)
                 .signWith(getKey())
@@ -39,14 +42,14 @@ public class JwtUtil {
     }
 
     /**
-     * 从 Token 解析用户 ID
+     * 从 Token 解析用户 ID（UUID 字符串）
      */
-    public Long getUserId(String token) {
+    public String getUserId(String token) {
         Claims claims = getClaims(token);
         if (claims == null) {
             return null;
         }
-        return Long.parseLong(claims.getSubject());
+        return claims.getSubject();
     }
 
     /**

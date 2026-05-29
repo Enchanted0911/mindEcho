@@ -8,6 +8,7 @@ import com.mindecho.module.emotion.dto.EmotionAnalyzeRequest;
 import com.mindecho.module.emotion.dto.EmotionAnalyzeResponse;
 import com.mindecho.module.emotion.entity.EmotionRecord;
 import com.mindecho.module.emotion.mapper.EmotionRecordMapper;
+import com.mindecho.module.memory.service.MemoryService;
 import com.mindecho.module.risk.service.RiskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +18,6 @@ import org.springframework.stereotype.Service;
 
 /**
  * 情绪分析服务
- * 使用 AI 分析用户消息的情绪类型
  */
 @Slf4j
 @Service
@@ -28,6 +28,7 @@ public class EmotionService {
     private final EmotionRecordMapper emotionRecordMapper;
     private final RiskService riskService;
     private final ChatMessageMapper chatMessageMapper;
+    private final MemoryService memoryService;
 
     private static final String EMOTION_ANALYZE_PROMPT = """
             请分析以下文本表达的主要情绪，从以下情绪类别中选择最符合的一个，只返回英文代码，不要有任何其他内容：
@@ -42,11 +43,10 @@ public class EmotionService {
     /**
      * 分析情绪（同步，用于批量分析或接口调用）
      */
-    public EmotionAnalyzeResponse analyze(Long userId, EmotionAnalyzeRequest request) {
+    public EmotionAnalyzeResponse analyze(String userId, EmotionAnalyzeRequest request) {
         String emotionCode = analyzeEmotion(request.getText());
         String riskLevel = riskService.detectRisk(request.getText()).getCode();
 
-        // 保存情绪记录
         EmotionRecord record = new EmotionRecord();
         record.setUserId(userId);
         record.setEmotion(emotionCode);
@@ -56,6 +56,8 @@ public class EmotionService {
                 : request.getText());
         emotionRecordMapper.insert(record);
 
+        saveEmotionMemoryIfSignificant(userId, emotionCode, request.getText());
+
         return EmotionAnalyzeResponse.builder()
                 .emotion(emotionCode)
                 .riskLevel(riskLevel)
@@ -64,18 +66,11 @@ public class EmotionService {
 
     /**
      * 异步情绪分析并更新聊天消息记录
-     *
-     * <p>由 ChatService 在保存用户消息后调用，完全在后台线程执行，
-     * 不阻塞 SSE 首字节响应时间。</p>
-     *
-     * @param messageId 需要更新情绪字段的聊天消息 ID
-     * @param text      待分析文本
      */
     @Async
-    public void analyzeEmotionAsync(Long messageId, String text) {
+    public void analyzeEmotionAsync(String messageId, String text) {
         try {
             String emotionCode = analyzeEmotion(text);
-            // 只更新 emotion 字段，避免读取整条消息再写回
             chatMessageMapper.update(null,
                     new LambdaUpdateWrapper<ChatMessage>()
                             .eq(ChatMessage::getId, messageId)
@@ -88,7 +83,36 @@ public class EmotionService {
     }
 
     /**
-     * 轻量情绪分析（内部调用，返回情绪代码）
+     * 异步情绪分析 + 向量记忆写入
+     *
+     * @param userId    用户 ID（UUID 字符串）
+     * @param messageId 聊天消息 ID（UUID 字符串，若非来自聊天则传 null）
+     * @param text      待分析文本
+     */
+    @Async
+    public void analyzeEmotionAndSaveMemoryAsync(String userId, String messageId, String text) {
+        try {
+            String emotionCode = analyzeEmotion(text);
+
+            if (messageId != null) {
+                chatMessageMapper.update(null,
+                        new LambdaUpdateWrapper<ChatMessage>()
+                                .eq(ChatMessage::getId, messageId)
+                                .eq(ChatMessage::getDeleted, 0)
+                                .set(ChatMessage::getEmotion, emotionCode)
+                );
+            }
+
+            saveEmotionMemoryIfSignificant(userId, emotionCode, text);
+
+        } catch (Exception e) {
+            log.warn("Async emotion analysis+memory failed for userId={}, messageId={}: {}",
+                    userId, messageId, e.getMessage());
+        }
+    }
+
+    /**
+     * 轻量情绪分析（内部调用）
      */
     public String analyzeEmotion(String text) {
         try {
@@ -99,14 +123,35 @@ public class EmotionService {
                     .content();
 
             String emotionCode = response != null ? response.trim().toLowerCase() : "neutral";
-
-            // 验证是否是合法的情绪代码
             EmotionEnum emotion = EmotionEnum.fromCode(emotionCode);
             return emotion.getCode();
         } catch (Exception e) {
             log.error("Emotion analysis failed", e);
             return EmotionEnum.NEUTRAL.getCode();
         }
+    }
+
+    private void saveEmotionMemoryIfSignificant(String userId, String emotionCode, String text) {
+        if (EmotionEnum.NEUTRAL.getCode().equals(emotionCode)) {
+            return;
+        }
+        try {
+            EmotionEnum emotion = EmotionEnum.fromCode(emotionCode);
+            String snippet = text.length() > 150 ? text.substring(0, 150) + "…" : text;
+            String content = String.format("[%s] 用户表达：%s", emotion.getDesc(), snippet);
+            int score = isNegativeEmotion(emotion) ? 7 : 5;
+            memoryService.saveMemory(userId, "emotion", content, score);
+            log.debug("Emotion memory saved: userId={}, emotion={}", userId, emotionCode);
+        } catch (Exception e) {
+            log.warn("Failed to save emotion memory: userId={}, emotion={}", userId, emotionCode, e);
+        }
+    }
+
+    private boolean isNegativeEmotion(EmotionEnum emotion) {
+        return switch (emotion) {
+            case ANXIETY, DEPRESSION, LONELINESS, SADNESS, FEAR, STRESS, ANGER -> true;
+            default -> false;
+        };
     }
 }
 

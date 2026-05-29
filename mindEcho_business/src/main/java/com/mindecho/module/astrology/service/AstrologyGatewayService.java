@@ -71,7 +71,7 @@ public class AstrologyGatewayService {
      * @param request   前端请求
      * @return 本命盘结果
      */
-    public NatalChartResponseDTO getNatalChart(Long userId, NatalRequestDTO request) {
+    public NatalChartResponseDTO getNatalChart(String userId, NatalRequestDTO request) {
         String cacheKey = KEY_NATAL_PREFIX + userId;
 
         // 尝试读取 Redis 缓存（本命盘永久缓存）
@@ -101,7 +101,7 @@ public class AstrologyGatewayService {
     /**
      * 强制刷新本命盘（用于用户重新录入出生信息）
      */
-    public NatalChartResponseDTO refreshNatalChart(Long userId, NatalRequestDTO request) {
+    public NatalChartResponseDTO refreshNatalChart(String userId, NatalRequestDTO request) {
         String cacheKey = KEY_NATAL_PREFIX + userId;
         redisTemplate.delete(cacheKey);
         log.info("Natal chart cache cleared for userId={}", userId);
@@ -117,7 +117,7 @@ public class AstrologyGatewayService {
      * @param request 前端请求
      * @return 和盘结果
      */
-    public SynastryResponseDTO getSynastryChart(Long userId, SynastryRequestDTO request) {
+    public SynastryResponseDTO getSynastryChart(String userId, SynastryRequestDTO request) {
         String pairHash = buildSynastryHash(request);
         String cacheKey = KEY_SYNASTRY_PREFIX + pairHash;
 
@@ -153,7 +153,7 @@ public class AstrologyGatewayService {
      * @param request 前端请求
      * @return 流运结果
      */
-    public TransitResponseDTO getTransitChart(Long userId, TransitRequestDTO request) {
+    public TransitResponseDTO getTransitChart(String userId, TransitRequestDTO request) {
         String targetDate = StringUtils.hasText(request.getTargetDate())
                 ? request.getTargetDate()
                 : LocalDate.now().toString();
@@ -239,14 +239,14 @@ public class AstrologyGatewayService {
     /**
      * 查询用户是否有缓存的本命盘（前端用于判断是否需要重新录入出生信息）
      */
-    public boolean hasNatalChart(Long userId) {
+    public boolean hasNatalChart(String userId) {
         return Boolean.TRUE.equals(redisTemplate.hasKey(KEY_NATAL_PREFIX + userId));
     }
 
     /**
      * 获取用户已缓存的本命盘（不触发重新计算）
      */
-    public NatalChartResponseDTO getCachedNatalChart(Long userId) {
+    public NatalChartResponseDTO getCachedNatalChart(String userId) {
         return getFromCache(KEY_NATAL_PREFIX + userId, NatalChartResponseDTO.class);
     }
 

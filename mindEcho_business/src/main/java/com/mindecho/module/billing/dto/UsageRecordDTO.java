@@ -3,7 +3,7 @@ package com.mindecho.module.billing.dto;
 import lombok.Builder;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * AI 使用量记录 DTO（用于消费详情展示）
@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Builder
 public class UsageRecordDTO {
 
-    private Long id;
+    private String id;
 
     /** 业务类型（CHAT/ASTROLOGY_NATAL 等） */
     private String businessType;
@@ -44,7 +44,7 @@ public class UsageRecordDTO {
     /** 状态 */
     private String status;
 
-    /** 创建时间 */
-    private LocalDateTime createdTime;
+    /** 创建时间（ISO-8601 带时区） */
+    private OffsetDateTime createdTime;
 }
 

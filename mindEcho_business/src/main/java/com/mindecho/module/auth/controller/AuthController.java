@@ -34,12 +34,24 @@ public class AuthController {
     }
 
     /**
+     * 获取当前登录用户信息（需要登录）
+     * GET /api/auth/profile
+     * 前端可在 VIP 页面、个人中心等处调用，拉取最新 VIP 状态
+     */
+    @GetMapping("/profile")
+    public Result<LoginResponse.UserInfoDTO> getProfile() {
+        String userId = UserContext.getUserId();
+        LoginResponse.UserInfoDTO userInfo = authService.getProfile(userId);
+        return Result.success(userInfo);
+    }
+
+    /**
      * 更新用户出生信息（需要登录）
      * PUT /api/auth/profile/birth
      */
     @PutMapping("/profile/birth")
     public Result<LoginResponse.UserInfoDTO> updateBirthInfo(@Valid @RequestBody UpdateBirthInfoRequest request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         log.info("UpdateBirthInfo: userId={}, city={}", userId, request.getBirthCity());
         LoginResponse.UserInfoDTO userInfo = authService.updateBirthInfo(userId, request);
         return Result.success(userInfo);

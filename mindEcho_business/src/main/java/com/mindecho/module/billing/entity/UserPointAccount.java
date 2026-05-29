@@ -3,7 +3,7 @@ package com.mindecho.module.billing.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 用户积分账户实体
@@ -16,12 +16,12 @@ import java.time.LocalDateTime;
 @TableName("user_point_account")
 public class UserPointAccount {
 
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
+    @TableId(type = IdType.ASSIGN_UUID)
+    private String id;
 
     /** 用户ID（唯一） */
     @TableField("user_id")
-    private Long userId;
+    private String userId;
 
     /** 可用积分余额（分）*/
     @TableField("balance")
@@ -52,13 +52,13 @@ public class UserPointAccount {
     @TableField("deleted")
     private Integer deleted;
 
-    /** 创建时间 */
+    /** 创建时间（带时区） */
     @TableField(value = "created_time", fill = FieldFill.INSERT)
-    private LocalDateTime createdTime;
+    private OffsetDateTime createdTime;
 
-    /** 更新时间 */
+    /** 更新时间（带时区） */
     @TableField(value = "updated_time", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedTime;
+    private OffsetDateTime updatedTime;
 
     /**
      * 是否余额足够

@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 会员订单 DTO
@@ -17,13 +17,15 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class VipOrderDTO {
 
-    private Long id;
+    private String id;
     private String orderNo;
     private BigDecimal amount;
     private String status;
     private String vipType;
-    private LocalDateTime expireTime;
-    private LocalDateTime createdTime;
+    /** VIP 到期时间（ISO-8601 带时区） */
+    private OffsetDateTime expireTime;
+    /** 创建时间（ISO-8601 带时区） */
+    private OffsetDateTime createdTime;
 
     /** 微信支付参数（下单时返回） */
     private WxPayParams wxPayParams;

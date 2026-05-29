@@ -3,7 +3,7 @@ package com.mindecho.module.personality.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * AI 人格配置实体
@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
 @TableName("ai_personality")
 public class AiPersonality {
 
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
+    @TableId(type = IdType.ASSIGN_UUID)
+    private String id;
 
     /** 人格编码，唯一标识，对应 user.ai_personality 字段 */
     @TableField("code")
@@ -56,10 +56,12 @@ public class AiPersonality {
     @TableField("deleted")
     private Integer deleted;
 
+    /** 创建时间（带时区） */
     @TableField(value = "created_time", fill = FieldFill.INSERT)
-    private LocalDateTime createdTime;
+    private OffsetDateTime createdTime;
 
+    /** 更新时间（带时区） */
     @TableField(value = "updated_time", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedTime;
+    private OffsetDateTime updatedTime;
 }
 

@@ -55,7 +55,7 @@ public class PaymentController {
      */
     @PostMapping("/order")
     public Result<VipOrderDTO> createOrder(@Valid @RequestBody CreateOrderRequest request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         return Result.success(paymentService.createOrder(userId, request));
     }
 
@@ -67,7 +67,7 @@ public class PaymentController {
      */
     @PostMapping("/point-order")
     public Result<PointOrderDTO> createPointOrder(@Valid @RequestBody CreatePointOrderRequest request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         return Result.success(paymentService.createPointOrder(userId, request));
     }
 
@@ -77,7 +77,7 @@ public class PaymentController {
      */
     @GetMapping("/point-order/{orderNo}")
     public Result<PointOrderDTO> getPointOrder(@PathVariable("orderNo") String orderNo) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         return Result.success(paymentService.getPointOrder(userId, orderNo));
     }
 
@@ -90,7 +90,7 @@ public class PaymentController {
      */
     @GetMapping("/order/{orderNo}")
     public Result<VipOrderDTO> getOrder(@PathVariable("orderNo") String orderNo) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         return Result.success(paymentService.getOrder(userId, orderNo));
     }
 

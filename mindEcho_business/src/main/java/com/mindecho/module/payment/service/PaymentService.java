@@ -24,7 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.Map;
 
 /**
@@ -122,7 +123,7 @@ public class PaymentService {
      * 创建会员订单并调用微信统一下单
      */
     @Transactional
-    public VipOrderDTO createOrder(Long userId, CreateOrderRequest request) {
+    public VipOrderDTO createOrder(String userId, CreateOrderRequest request) {
         String vipType = request.getVipType();
 
         if (!VIP_PRICE_MAP.containsKey(vipType)) {
@@ -201,7 +202,7 @@ public class PaymentService {
      * 创建积分充值订单并调用微信统一下单
      */
     @Transactional
-    public PointOrderDTO createPointOrder(Long userId, CreatePointOrderRequest request) {
+    public PointOrderDTO createPointOrder(String userId, CreatePointOrderRequest request) {
         String packageType = request.getPackageType();
         long[] packageInfo = POINT_PACKAGE_MAP.get(packageType);
         if (packageInfo == null) {
@@ -309,7 +310,7 @@ public class PaymentService {
             throw new BusinessException(ResultCode.PARAM_ERROR);
         }
 
-        LocalDateTime expireTime = LocalDateTime.now().plusDays(days);
+        OffsetDateTime expireTime = OffsetDateTime.now(ZoneId.of("Asia/Shanghai")).plusDays(days);
         order.setStatus(STATUS_PAID);
         order.setExpireTime(expireTime);
         if (transactionId != null && !transactionId.isBlank()) {
@@ -325,9 +326,10 @@ public class PaymentService {
             return;
         }
 
-        LocalDateTime base = (user.getVipExpireTime() != null
-                && user.getVipExpireTime().isAfter(LocalDateTime.now()))
-                ? user.getVipExpireTime() : LocalDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(ZoneId.of("Asia/Shanghai"));
+        OffsetDateTime base = (user.getVipExpireTime() != null
+                && user.getVipExpireTime().isAfter(now))
+                ? user.getVipExpireTime() : now;
         user.setVipExpireTime(base.plusDays(days));
         userMapper.updateById(user);
         log.info("User VIP updated: userId={}, newExpireTime={}", user.getId(), user.getVipExpireTime());
@@ -385,7 +387,7 @@ public class PaymentService {
 
     // ─────────────────────── 查询订单 ───────────────────────
 
-    public VipOrderDTO getOrder(Long userId, String orderNo) {
+    public VipOrderDTO getOrder(String userId, String orderNo) {
         VipOrder order = vipOrderMapper.selectOne(
                 new LambdaQueryWrapper<VipOrder>()
                         .eq(VipOrder::getOrderNo, orderNo)
@@ -397,7 +399,7 @@ public class PaymentService {
         return toVipDTO(order);
     }
 
-    public PointOrderDTO getPointOrder(Long userId, String orderNo) {
+    public PointOrderDTO getPointOrder(String userId, String orderNo) {
         PointOrder order = pointOrderMapper.selectOne(
                 new LambdaQueryWrapper<PointOrder>()
                         .eq(PointOrder::getOrderNo, orderNo)

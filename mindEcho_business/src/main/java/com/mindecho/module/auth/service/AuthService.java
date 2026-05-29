@@ -4,6 +4,7 @@ import cn.hutool.http.HttpUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.mindecho.common.config.WechatMiniConfig;
 import com.mindecho.common.exception.BusinessException;
 import com.mindecho.common.result.ResultCode;
 import com.mindecho.common.util.JwtUtil;
@@ -16,7 +17,6 @@ import com.mindecho.module.billing.service.PointAccountService;
 import com.mindecho.module.personality.service.PersonalityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,96 +30,53 @@ import java.time.format.DateTimeFormatter;
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final String WECHAT_ERRCODE_KEY = "errcode";
+    private static final String WECHAT_OPENID_KEY  = "openid";
+
     private final UserMapper userMapper;
     private final JwtUtil jwtUtil;
     private final PersonalityService personalityService;
     private final PointAccountService pointAccountService;
-
-    @Value("${wechat.appid}")
-    private String appid;
-
-    @Value("${wechat.secret}")
-    private String secret;
-
-    @Value("${wechat.login-url}")
-    private String loginUrl;
+    private final WechatMiniConfig wechatConfig;
 
     /**
      * 微信小程序登录
+     *
+     * <p>包含用户首次注册的初始化逻辑，整体声明为事务，确保
+     * 新用户记录与积分账户创建的原子性。
      */
+    @Transactional(rollbackFor = Exception.class)
     public LoginResponse wxLogin(WxLoginRequest request) {
-        // 1. 调用微信 API 换取 openid
         String openid = getOpenid(request.getCode());
 
-        // 2. 查询或创建用户
         User user = userMapper.selectOne(
                 new LambdaQueryWrapper<User>()
                         .eq(User::getOpenid, openid)
                         .eq(User::getDeleted, 0)
         );
         if (user == null) {
-            user = createUser(openid);
+            user = initNewUser(openid);
         }
 
-        // 3. 生成 JWT Token
         String token = jwtUtil.generateToken(user.getId());
-
-        // 4. 构建响应
         return buildLoginResponse(token, user);
     }
 
     /**
-     * 调用微信接口获取 openid
+     * 获取当前用户信息
      */
-    private String getOpenid(String code) {
-        String url = String.format("%s?appid=%s&secret=%s&js_code=%s&grant_type=authorization_code",
-                loginUrl, appid, secret, code);
-
-        try {
-            String response = HttpUtil.get(url);
-            JSONObject json = JSONUtil.parseObj(response);
-
-            if (json.containsKey("errcode") && json.getInt("errcode") != 0) {
-                log.error("WeChat login failed: {}", json);
-                throw new BusinessException(ResultCode.WECHAT_LOGIN_FAILED);
-            }
-
-            return json.getStr("openid");
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("WeChat login error", e);
-            throw new BusinessException(ResultCode.WECHAT_LOGIN_FAILED);
+    public LoginResponse.UserInfoDTO getProfile(String userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.USER_NOT_FOUND);
         }
-    }
-
-    /**
-     * 创建新用户（事务保证用户记录与积分账户一起创建成功，否则全部回滚）
-     */
-    @Transactional(rollbackFor = Exception.class)
-    protected User createUser(String openid) {
-        User user = new User();
-        user.setOpenid(openid);
-        user.setNickname("用户" + openid.substring(openid.length() - 4));
-        user.setAiPersonality(personalityService.getDefaultCode());
-        userMapper.insert(user);
-        log.info("New user created: openid={}", openid);
-
-        // 初始化积分账户（赠送新用户礼包积分）
-        // 不捕获异常，让事务回滚保证用户记录与积分账户的原子性
-        pointAccountService.getOrCreateAccount(user.getId());
-
-        return user;
+        return buildUserInfoDTO(user);
     }
 
     /**
      * 更新用户出生信息
-     *
-     * @param userId  当前用户 ID
-     * @param request 出生信息请求
-     * @return 更新后的用户信息
      */
-    public LoginResponse.UserInfoDTO updateBirthInfo(Long userId, UpdateBirthInfoRequest request) {
+    public LoginResponse.UserInfoDTO updateBirthInfo(String userId, UpdateBirthInfoRequest request) {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(ResultCode.USER_NOT_FOUND);
@@ -133,9 +90,41 @@ public class AuthService {
         return buildUserInfoDTO(user);
     }
 
+    // ─── 私有方法 ─────────────────────────────────────────────────────────────
+
     /**
-     * 构建登录响应
+     * 初始化新用户记录和积分账户（在事务方法内调用，事务由调用方保证）
      */
+    private User initNewUser(String openid) {
+        User user = new User();
+        user.setOpenid(openid);
+        user.setNickname("用户" + openid.substring(openid.length() - 4));
+        user.setAiPersonality(personalityService.getDefaultCode());
+        userMapper.insert(user);
+        log.info("New user created: openid={}", openid);
+        pointAccountService.getOrCreateAccount(user.getId());
+        return user;
+    }
+
+    private String getOpenid(String code) {
+        String url = String.format("%s?appid=%s&secret=%s&js_code=%s&grant_type=authorization_code",
+                wechatConfig.getLoginUrl(), wechatConfig.getAppid(), wechatConfig.getSecret(), code);
+        try {
+            String response = HttpUtil.get(url);
+            JSONObject json = JSONUtil.parseObj(response);
+            if (json.containsKey(WECHAT_ERRCODE_KEY) && json.getInt(WECHAT_ERRCODE_KEY) != 0) {
+                log.error("WeChat login failed: {}", json);
+                throw new BusinessException(ResultCode.WECHAT_LOGIN_FAILED);
+            }
+            return json.getStr(WECHAT_OPENID_KEY);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("WeChat login error", e);
+            throw new BusinessException(ResultCode.WECHAT_LOGIN_FAILED);
+        }
+    }
+
     private LoginResponse buildLoginResponse(String token, User user) {
         return LoginResponse.builder()
                 .token(token)
@@ -143,9 +132,6 @@ public class AuthService {
                 .build();
     }
 
-    /**
-     * 将 User 实体转换为 UserInfoDTO（供登录响应和更新响应共用）
-     */
     private LoginResponse.UserInfoDTO buildUserInfoDTO(User user) {
         return LoginResponse.UserInfoDTO.builder()
                 .id(user.getId())

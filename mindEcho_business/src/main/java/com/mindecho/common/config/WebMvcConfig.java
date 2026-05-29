@@ -44,6 +44,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/personality/list",
                         "/payment/wx-callback",
                         "/actuator/**"
+                        // 注意：/astrology/** 不能加入白名单，所有星盘接口均需 JWT 认证
+                        // (AstrologyController 内部使用了 UserContext.getUserId())
                 );
     }
 

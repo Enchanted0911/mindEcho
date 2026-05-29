@@ -4,23 +4,26 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 情绪日记实体
+ *
+ * <p>diary_date 使用 LocalDate（只关心日期，不含时间），
+ * 创建/更新时间使用 OffsetDateTime 存储带时区的精确时刻。
  */
 @Data
 @TableName("diary_entry")
 public class DiaryEntry {
 
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
+    @TableId(type = IdType.ASSIGN_UUID)
+    private String id;
 
     /** 用户ID */
     @TableField("user_id")
-    private Long userId;
+    private String userId;
 
-    /** 日记日期 */
+    /** 日记日期（纯日期，不含时区） */
     @TableField("diary_date")
     private LocalDate diaryDate;
 
@@ -49,12 +52,12 @@ public class DiaryEntry {
     @TableField("deleted")
     private Integer deleted;
 
-    /** 创建时间 */
+    /** 创建时间（带时区） */
     @TableField(value = "created_time", fill = FieldFill.INSERT)
-    private LocalDateTime createdTime;
+    private OffsetDateTime createdTime;
 
-    /** 更新时间 */
+    /** 更新时间（带时区） */
     @TableField(value = "updated_time", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedTime;
+    private OffsetDateTime updatedTime;
 }
 

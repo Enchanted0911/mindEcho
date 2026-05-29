@@ -28,7 +28,7 @@ public class EmotionController {
      */
     @PostMapping("/analyze")
     public Result<EmotionAnalyzeResponse> analyze(@Valid @RequestBody EmotionAnalyzeRequest request) {
-        Long userId = UserContext.getUserId();
+        String userId = UserContext.getUserId();
         return Result.success(emotionService.analyze(userId, request));
     }
 }

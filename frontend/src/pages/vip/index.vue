@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
+import {getProfile} from '../../api/auth'
 import {createOrder, getOrder, wxPay} from '../../api/payment'
 import {useUserStore} from '../../store/user'
 
@@ -44,17 +45,35 @@ const VIP_BENEFITS = [
   { emoji: '🎯', title: '深度陪伴', desc: '更精准的情绪理解和回复' }
 ]
 
-// 页面加载时刷新用户最新 VIP 状态（从本地存储恢复）
-onMounted(() => {
-  const cached = uni.getStorageSync('userInfo')
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached)
-      // 用缓存中最新的 isVip 状态更新 store（登录后可能 VIP 已到期）
-      if (userStore.userInfo && parsed) {
-        userStore.setUserInfo(parsed)
-      }
-    } catch (_) { /* ignore */ }
+// 页面加载时从后端拉取最新用户信息（确保 VIP 状态与到期时间是最新的）
+// 若接口失败（网络异常等），降级读取本地缓存，避免页面白屏
+onMounted(async () => {
+  if (!userStore.isLoggedIn) return
+  try {
+    const latestInfo = await getProfile()
+    // 后端返回的是 UserInfoDTO（id 为 Long，序列化为字符串），与 UserInfo 结构兼容
+    userStore.setUserInfo({
+      id: String(latestInfo.id),
+      nickname: latestInfo.nickname,
+      avatar: latestInfo.avatar,
+      isVip: latestInfo.isVip,
+      vipExpireTime: latestInfo.vipExpireTime ?? null,
+      aiPersonality: latestInfo.aiPersonality,
+      birthCity: latestInfo.birthCity ?? null,
+      birthLat: latestInfo.birthLat ?? null,
+      birthLng: latestInfo.birthLng ?? null,
+      birthTime: latestInfo.birthTime ?? null
+    })
+  } catch (_) {
+    // 后端请求失败时降级：尝试用本地缓存填充 store（仅在 store 为空时执行）
+    if (!userStore.userInfo) {
+      try {
+        const cached = uni.getStorageSync('userInfo')
+        if (cached) {
+          userStore.setUserInfo(JSON.parse(cached))
+        }
+      } catch (__) { /* ignore */ }
+    }
   }
 })
 

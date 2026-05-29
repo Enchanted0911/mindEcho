@@ -2,14 +2,12 @@ package com.mindecho.module.astrology.prompt;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mindecho.module.memory.entity.Memory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * AI 占星师 Prompt 构建器
@@ -113,7 +111,7 @@ public class AstrologerPromptBuilder {
      * @return 完整 System Prompt
      */
     public String buildNatalPrompt(JsonNode chartJson, String ragContent,
-                                   List<Memory> memories, String focus, String tone) {
+                                   List<String> memories, String focus, String tone) {
         StringBuilder sb = new StringBuilder();
         appendStaticBlocks(sb, tone);
         appendFocusHint(sb, "NATAL", focus);
@@ -137,7 +135,7 @@ public class AstrologerPromptBuilder {
      * @return 完整 System Prompt
      */
     public String buildSynastryPrompt(JsonNode chartJson, String ragContent,
-                                      List<Memory> memories, String partnerName,
+                                      List<String> memories, String partnerName,
                                       String relationshipType, String focus, String tone) {
         StringBuilder sb = new StringBuilder();
         appendStaticBlocks(sb, tone);
@@ -162,7 +160,7 @@ public class AstrologerPromptBuilder {
      * @return 完整 System Prompt
      */
     public String buildTransitPrompt(JsonNode chartJson, String ragContent,
-                                     List<Memory> memories, String targetDate,
+                                     List<String> memories, String targetDate,
                                      String focus, String tone) {
         StringBuilder sb = new StringBuilder();
         appendStaticBlocks(sb, tone);
@@ -223,53 +221,13 @@ public class AstrologerPromptBuilder {
 
     /**
      * 追加用户 Memory 块
+     * <p>由于 pgvector 语义检索已按相关度排序，此处直接列举内容文本，不再区分类型。
      */
-    private void appendMemoryBlock(StringBuilder sb, List<Memory> memories) {
+    private void appendMemoryBlock(StringBuilder sb, List<String> memories) {
         if (memories == null || memories.isEmpty()) return;
 
         sb.append("\n【关于这位用户，你了解的情绪与人格信息】\n");
-
-        // 摘要（最重要）
-        memories.stream()
-                .filter(m -> "summary".equals(m.getMemoryType()))
-                .findFirst()
-                .ifPresent(m -> sb.append("历史情绪摘要：").append(m.getContent()).append("\n"));
-
-        // 情绪 Memory（最多 3 条）
-        List<Memory> emotions = memories.stream()
-                .filter(m -> "emotion".equals(m.getMemoryType()))
-                .limit(3)
-                .collect(Collectors.toList());
-        if (!emotions.isEmpty()) {
-            sb.append("情绪历史：\n");
-            emotions.forEach(m -> sb.append("- ").append(m.getContent()).append("\n"));
-        }
-
-        // 关系 Memory（最多 3 条）
-        List<Memory> relations = memories.stream()
-                .filter(m -> "relationship".equals(m.getMemoryType()))
-                .limit(3)
-                .collect(Collectors.toList());
-        if (!relations.isEmpty()) {
-            sb.append("关系记录：\n");
-            relations.forEach(m -> sb.append("- ").append(m.getContent()).append("\n"));
-        }
-
-        // 人格 Memory
-        List<Memory> profiles = memories.stream()
-                .filter(m -> "profile".equals(m.getMemoryType()))
-                .limit(3)
-                .collect(Collectors.toList());
-        if (!profiles.isEmpty()) {
-            sb.append("人格画像：\n");
-            profiles.forEach(m -> sb.append("- ").append(m.getContent()).append("\n"));
-        }
-
-        // 历史星盘解读（如有）
-        memories.stream()
-                .filter(m -> "astrology_history".equals(m.getMemoryType()))
-                .findFirst()
-                .ifPresent(m -> sb.append("历史星盘解读：").append(m.getContent()).append("\n"));
+        memories.forEach(content -> sb.append("- ").append(content).append("\n"));
     }
 
     /**

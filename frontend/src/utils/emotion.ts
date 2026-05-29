@@ -39,13 +39,31 @@ export function getPersonalityInfo(code: string): { label: string; desc: string;
 }
 
 /**
- * 跨平台日期解析：将 "yyyy-MM-dd HH:mm:ss" 转为 iOS 兼容的 ISO 8601 格式
- * iOS Safari 不支持 "yyyy-MM-dd HH:mm:ss"（空格分隔），需替换为 "T" 连接
+ * 跨平台日期解析，兼容以下格式：
+ *   1. "yyyy-MM-dd HH:mm:ss"       — 后端 LocalDateTime 序列化（无时区）
+ *   2. "yyyy-MM-ddTHH:mm:ss"       — ISO 8601 无时区
+ *   3. "yyyy-MM-ddTHH:mm:ss+08:00" — ISO 8601 带时区（OffsetDateTime）
+ *   4. "yyyy-MM-ddTHH:mm:ss.SSSZ"  — ISO 8601 带毫秒和 UTC 偏移
+ *
+ * iOS Safari / 微信小程序不支持带空格的日期字符串，需统一转为 "T" 连接格式。
+ * 对于带时区的字符串（含 +/-），直接交由 Date 解析（各平台均支持 ISO 8601）。
  */
 export function parseDate(dateStr: string): Date {
   if (!dateStr) return new Date(NaN)
-  // "2026-05-28 12:38:30" → "2026-05-28T12:38:30"
-  return new Date(dateStr.replace(' ', 'T'))
+  // 将空格分隔符替换为 "T"，兼容 "yyyy-MM-dd HH:mm:ss" 格式
+  const normalized = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T')
+  const date = new Date(normalized)
+  // 若解析结果无效（NaN），尝试手动解析 "yyyy-MM-dd HH:mm:ss" 作为本地时间
+  if (isNaN(date.getTime())) {
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/)
+    if (match) {
+      return new Date(
+        parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]),
+        parseInt(match[4]), parseInt(match[5]), parseInt(match[6])
+      )
+    }
+  }
+  return date
 }
 
 export function formatDate(dateStr: string): string {

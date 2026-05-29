@@ -5,32 +5,33 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.mindecho.module.memory.entity.Memory;
 import com.mindecho.module.memory.mapper.MemoryMapper;
 import com.mindecho.module.memory.service.MemoryService;
+import com.mindecho.module.memory.service.MemoryVectorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.document.Document;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 占星专属 Memory 服务
  *
  * <p>在通用 {@link MemoryService} 基础上，管理占星场景特有的记忆类型：
  * <ul>
- *   <li>{@code emotion}        — 情绪标签（焦虑、孤独、兴奋…）</li>
- *   <li>{@code relationship}   — 关系记录（分手、依恋、和解…）</li>
- *   <li>{@code profile}        — 人格画像（敏感、回避型依恋…）</li>
+ *   <li>{@code emotion}           — 情绪标签（焦虑、孤独、兴奋…）</li>
+ *   <li>{@code relationship}      — 关系记录（分手、依恋、和解…）</li>
+ *   <li>{@code profile}           — 人格画像（敏感、回避型依恋…）</li>
  *   <li>{@code astrology_history} — 历史星盘解读摘要</li>
  * </ul>
  *
- * <p>Memory 检索策略：
+ * <p>Memory 检索策略（基于 pgvector 语义相似度检索）：
  * <ul>
- *   <li>单盘解读（NATAL）→ 返回 profile + emotion + summary</li>
- *   <li>和盘解读（SYNASTRY）→ 返回 relationship + emotion + profile</li>
- *   <li>流运解读（TRANSIT）→ 返回 emotion + summary + profile</li>
+ *   <li>单盘解读（NATAL）    → profile + emotion + summary + astrology_history</li>
+ *   <li>和盘解读（SYNASTRY） → relationship + emotion + profile</li>
+ *   <li>流运解读（TRANSIT）  → emotion + summary + profile</li>
  * </ul>
  */
 @Slf4j
@@ -44,42 +45,59 @@ public class AstrologyMemoryService {
     private static final String TYPE_ASTROLOGY_HISTORY = "astrology_history";
     private static final String TYPE_SUMMARY = "summary";
 
+    /** 占星场景语义检索时，每种类型最多返回条数 */
+    private static final int TOP_K_PER_TYPE = 3;
+
     private final MemoryMapper memoryMapper;
     private final MemoryService memoryService;
+    private final MemoryVectorService memoryVectorService;
 
     // ─────────────────────── Memory 检索 ─────────────────────────────────
 
     /**
-     * 为单盘解读检索相关 Memory
-     * 策略：profile（人格画像）+ emotion（情绪历史）+ summary（对话摘要）+ astrology_history
+     * 为单盘解读检索相关 Memory（语义检索）
+     * 策略：profile + emotion + summary + astrology_history
+     *
+     * @param userId 用户 ID
+     * @param query  当前解读焦点或用户提问（作为语义 query）
      */
-    public List<Memory> recallForNatal(Long userId) {
-        return recallByTypes(userId, List.of(TYPE_PROFILE, TYPE_EMOTION, TYPE_SUMMARY, TYPE_ASTROLOGY_HISTORY));
+    public List<String> recallForNatal(String userId, String query) {
+        return recallByTypesVectorSearch(userId,
+                List.of(TYPE_PROFILE, TYPE_EMOTION, TYPE_SUMMARY, TYPE_ASTROLOGY_HISTORY),
+                query);
     }
 
     /**
-     * 为和盘解读检索相关 Memory
-     * 策略：relationship（关系记录）+ emotion（情绪历史）+ profile（人格）
-     * 重点：用户的恋爱历史、情感依赖模式、长期关系偏好
+     * 为和盘解读检索相关 Memory（语义检索）
+     * 策略：relationship + emotion + profile
+     *
+     * @param userId 用户 ID
+     * @param query  当前解读焦点或用户提问
      */
-    public List<Memory> recallForSynastry(Long userId) {
-        return recallByTypes(userId, List.of(TYPE_RELATIONSHIP, TYPE_EMOTION, TYPE_PROFILE));
+    public List<String> recallForSynastry(String userId, String query) {
+        return recallByTypesVectorSearch(userId,
+                List.of(TYPE_RELATIONSHIP, TYPE_EMOTION, TYPE_PROFILE),
+                query);
     }
 
     /**
-     * 为流运解读检索相关 Memory
-     * 策略：emotion（当前情绪状态）+ summary（历史摘要）+ profile（人格）
-     * 重点：当前情绪、压力来源、感情变化信号
+     * 为流运解读检索相关 Memory（语义检索）
+     * 策略：emotion + summary + profile
+     *
+     * @param userId 用户 ID
+     * @param query  当前解读焦点或用户提问
      */
-    public List<Memory> recallForTransit(Long userId) {
-        return recallByTypes(userId, List.of(TYPE_EMOTION, TYPE_SUMMARY, TYPE_PROFILE));
+    public List<String> recallForTransit(String userId, String query) {
+        return recallByTypesVectorSearch(userId,
+                List.of(TYPE_EMOTION, TYPE_SUMMARY, TYPE_PROFILE),
+                query);
     }
 
     // ─────────────────────── Memory 写入 ─────────────────────────────────
 
     /**
      * 异步保存本次 AI 解读摘要到 astrology_history Memory
-     * （用于下次解读时的历史参考）
+     * （保存后自动向量化写入 pgvector，用于下次解读时的历史参考）
      *
      * @param userId          用户 ID
      * @param interpretType   解读类型（NATAL/SYNASTRY/TRANSIT）
@@ -87,7 +105,7 @@ public class AstrologyMemoryService {
      * @param focus           解读焦点
      */
     @Async
-    public void saveInterpretationHistoryAsync(Long userId, String interpretType,
+    public void saveInterpretationHistoryAsync(String userId, String interpretType,
                                                String interpretation, String focus) {
         try {
             if (!StringUtils.hasText(interpretation)) return;
@@ -100,7 +118,7 @@ public class AstrologyMemoryService {
             String prefix = buildHistoryPrefix(interpretType, focus);
             String content = prefix + summary;
 
-            // 软删除旧的同类型历史（每类型保留最新 1 条，防止无限增长）
+            // 软删除旧的同类型历史（每类型保留最新 1 条），同步删除 pgvector 向量
             List<Memory> existing = memoryMapper.selectList(
                     new LambdaQueryWrapper<Memory>()
                             .eq(Memory::getUserId, userId)
@@ -109,11 +127,9 @@ public class AstrologyMemoryService {
             );
             existing.stream()
                     .filter(m -> m.getContent().startsWith(prefix))
-                    .forEach(m -> {
-                        m.setDeleted(1);
-                        memoryMapper.updateById(m);
-                    });
+                    .forEach(memoryService::deleteMemory);
 
+            // saveMemory 会自动写入 pgvector（astrology_history 属于 VECTORIZED_TYPES）
             memoryService.saveMemory(userId, TYPE_ASTROLOGY_HISTORY, content, 7);
             log.debug("Astrology history saved: userId={}, type={}", userId, interpretType);
         } catch (Exception e) {
@@ -131,11 +147,10 @@ public class AstrologyMemoryService {
      * @param chartType NATAL / SYNASTRY / TRANSIT
      */
     @Async
-    public void extractAndSaveChartEmotionTagsAsync(Long userId, JsonNode chartJson, String chartType) {
+    public void extractAndSaveChartEmotionTagsAsync(String userId, JsonNode chartJson, String chartType) {
         try {
             if (chartJson == null) return;
 
-            // 从 Python 服务的 summary 字段中提取情绪相关关键词
             if (chartJson.has("summary")) {
                 JsonNode summary = chartJson.get("summary");
                 extractEmotionFromSummary(userId, summary, chartType);
@@ -152,6 +167,7 @@ public class AstrologyMemoryService {
 
     /**
      * 异步保存关系记录（和盘完成后调用）
+     * （保存后自动向量化写入 pgvector）
      *
      * @param userId           用户 ID
      * @param partnerName      对方名字
@@ -159,13 +175,14 @@ public class AstrologyMemoryService {
      * @param themes           和盘主题标签列表
      */
     @Async
-    public void saveRelationshipRecord(Long userId, String partnerName,
+    public void saveRelationshipRecord(String userId, String partnerName,
                                        String relationshipType, List<String> themes) {
         try {
             if (themes == null || themes.isEmpty()) return;
             String themeStr = String.join("、", themes);
             String content = String.format("[%s] 与%s的关系分析：%s",
                     mapRelationshipType(relationshipType), partnerName, themeStr);
+            // relationship 属于 VECTORIZED_TYPES，会自动向量化
             memoryService.saveMemory(userId, TYPE_RELATIONSHIP, content, 8);
             log.debug("Relationship memory saved: userId={}, partner={}", userId, partnerName);
         } catch (Exception e) {
@@ -173,44 +190,119 @@ public class AstrologyMemoryService {
         }
     }
 
+    /**
+     * 异步从 AI 解读文本中提取情绪特征并写入向量记忆（emotion 类型）
+     *
+     * <p>从解读文本中取前 200 字作为情绪语义锚点，标注解读类型和焦点，
+     * 便于后续对话通过 pgvector 检索相关情绪状态。
+     *
+     * @param userId         用户 ID
+     * @param interpretType  解读类型（NATAL/TRANSIT）
+     * @param interpretation AI 解读全文
+     * @param focus          解读焦点（如「感情」「事业」）
+     */
+    @Async
+    public void extractAndSaveInterpretationEmotionAsync(String userId, String interpretType,
+                                                          String interpretation, String focus) {
+        try {
+            if (!StringUtils.hasText(interpretation)) return;
+            // 取解读摘要片段作为情绪语义内容（前 200 字）
+            String snippet = interpretation.length() > 200
+                    ? interpretation.substring(0, 200) + "…"
+                    : interpretation;
+            String focusPart = StringUtils.hasText(focus) ? ("/" + focus) : "";
+            String content = String.format("[%s%s 解读情绪] %s", interpretType, focusPart, snippet);
+            memoryService.saveMemory(userId, TYPE_EMOTION, content, 6);
+            log.debug("Interpretation emotion memory saved: userId={}, type={}", userId, interpretType);
+        } catch (Exception e) {
+            log.warn("Failed to save interpretation emotion memory: userId={}", userId, e);
+        }
+    }
+
+    /**
+     * 异步从和盘解读文本中提取关系主题并写入向量记忆（relationship 类型）
+     *
+     * <p>补充 {@link #saveRelationshipRecord} 的数据来源，将 AI 解读中的关系叙述
+     * 也写入向量，增强关系记忆的语义覆盖。
+     *
+     * @param userId           用户 ID
+     * @param partnerName      对方名字
+     * @param relationshipType 关系类型
+     * @param interpretation   AI 和盘解读全文
+     */
+    @Async
+    public void extractAndSaveRelationshipFromInterpretAsync(String userId, String partnerName,
+                                                              String relationshipType,
+                                                              String interpretation) {
+        try {
+            if (!StringUtils.hasText(interpretation)) return;
+            String partner = StringUtils.hasText(partnerName) ? partnerName : "对方";
+            String relType = mapRelationshipType(relationshipType);
+            String snippet = interpretation.length() > 200
+                    ? interpretation.substring(0, 200) + "…"
+                    : interpretation;
+            String content = String.format("[%s关系解读] 与%s：%s", relType, partner, snippet);
+            memoryService.saveMemory(userId, TYPE_RELATIONSHIP, content, 7);
+            log.debug("Relationship interpret memory saved: userId={}, partner={}", userId, partner);
+        } catch (Exception e) {
+            log.warn("Failed to save relationship interpret memory: userId={}", userId, e);
+        }
+    }
+
     // ─────────────────────── 私有方法 ─────────────────────────────────────
 
     /**
-     * 按指定类型顺序检索 Memory，合并去重
+     * 使用 pgvector 语义检索，按指定类型顺序检索 Memory 内容
      */
-    private List<Memory> recallByTypes(Long userId, List<String> types) {
-        List<Memory> result = new ArrayList<>();
-        for (String type : types) {
-            List<Memory> memories = memoryMapper.selectList(
-                    new LambdaQueryWrapper<Memory>()
-                            .eq(Memory::getUserId, userId)
-                            .eq(Memory::getMemoryType, type)
-                            .eq(Memory::getDeleted, 0)
-                            .orderByDesc(Memory::getImportanceScore)
-            );
-            // 每种类型最多取前 3 条（按重要度降序）
-            result.addAll(memories.stream().limit(3).collect(Collectors.toList()));
+    private List<String> recallByTypesVectorSearch(String userId, List<String> types, String query) {
+        if (!StringUtils.hasText(query)) {
+            // 无 query 时降级为按重要度排序
+            return recallByTypesImportance(userId, types);
         }
-        log.debug("Recalled {} memories for userId={}", result.size(), userId);
+        List<Document> docs = memoryVectorService.searchMemoriesByTypes(
+                userId, types, query, TOP_K_PER_TYPE);
+        List<String> contents = MemoryVectorService.extractContents(docs);
+        log.debug("Astrology vector recall: userId={}, types={}, recalled={}",
+                userId, types, contents.size());
+        return contents;
+    }
+
+    /**
+     * 降级方法：按重要度排序返回记忆内容
+     */
+    private List<String> recallByTypesImportance(String userId, List<String> types) {
+        List<String> result = new ArrayList<>();
+        for (String type : types) {
+            memoryMapper.selectList(
+                            new LambdaQueryWrapper<Memory>()
+                                    .eq(Memory::getUserId, userId)
+                                    .eq(Memory::getMemoryType, type)
+                                    .eq(Memory::getDeleted, 0)
+                                    .orderByDesc(Memory::getImportanceScore)
+                                    .last("LIMIT 3")
+                    ).stream()
+                    .map(Memory::getContent)
+                    .forEach(result::add);
+        }
         return result;
     }
 
-    private void extractEmotionFromSummary(Long userId, JsonNode summary, String chartType) {
+    private void extractEmotionFromSummary(String userId, JsonNode summary, String chartType) {
         if (summary == null) return;
-        // 从 summary 中提取情绪相关字段（根据 Python 服务的实际返回结构调整）
         String[] emotionFields = {"dominant_emotion", "emotional_pattern", "mood"};
         for (String field : emotionFields) {
             if (summary.has(field)) {
                 String value = summary.get(field).asText();
                 if (StringUtils.hasText(value) && !"null".equals(value)) {
                     String content = String.format("[%s] 情绪特征：%s", chartType, value);
+                    // emotion 属于 VECTORIZED_TYPES，会自动向量化
                     memoryService.saveMemory(userId, TYPE_EMOTION, content, 6);
                 }
             }
         }
     }
 
-    private void extractEmotionFromTransitEvents(Long userId, JsonNode events) {
+    private void extractEmotionFromTransitEvents(String userId, JsonNode events) {
         if (!events.isArray()) return;
         List<String> highImpactEvents = new ArrayList<>();
         events.forEach(event -> {

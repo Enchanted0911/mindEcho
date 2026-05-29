@@ -3,7 +3,7 @@ package com.mindecho.module.billing.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 积分流水实体
@@ -15,8 +15,8 @@ import java.time.LocalDateTime;
 @TableName("point_transaction")
 public class PointTransaction {
 
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
+    @TableId(type = IdType.ASSIGN_UUID)
+    private String id;
 
     /** 流水号（全局唯一，便于幂等校验） */
     @TableField("transaction_no")
@@ -24,7 +24,7 @@ public class PointTransaction {
 
     /** 用户ID */
     @TableField("user_id")
-    private Long userId;
+    private String userId;
 
     /**
      * 变动积分（正数=增加，负数=减少）
@@ -49,13 +49,13 @@ public class PointTransaction {
     private Long afterBalance;
 
     /**
-     * 关联业务ID
+     * 关联业务ID（UUID 字符串）
      * - RECHARGE/POINT_RECHARGE: vip_order.id 或 point_order.id
      * - PRE_DEDUCT/CONSUME/REFUND: ai_usage_record.id
      * - SYSTEM_GIFT/ADMIN_ADJUST: 后台操作 ID
      */
     @TableField("business_id")
-    private Long businessId;
+    private String businessId;
 
     /** 备注说明 */
     @TableField("remark")
@@ -67,12 +67,12 @@ public class PointTransaction {
     @TableField("status")
     private String status;
 
-    /** 创建时间 */
+    /** 创建时间（带时区） */
     @TableField(value = "created_time", fill = FieldFill.INSERT)
-    private LocalDateTime createdTime;
+    private OffsetDateTime createdTime;
 
-    /** 更新时间 */
+    /** 更新时间（带时区） */
     @TableField(value = "updated_time", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedTime;
+    private OffsetDateTime updatedTime;
 }
 

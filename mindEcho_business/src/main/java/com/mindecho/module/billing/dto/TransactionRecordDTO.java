@@ -3,7 +3,7 @@ package com.mindecho.module.billing.dto;
 import lombok.Builder;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 积分流水记录 DTO
@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Builder
 public class TransactionRecordDTO {
 
-    private Long id;
+    private String id;
 
     /** 流水号 */
     private String transactionNo;
@@ -38,7 +38,7 @@ public class TransactionRecordDTO {
     /** 状态 */
     private String status;
 
-    /** 创建时间 */
-    private LocalDateTime createdTime;
+    /** 创建时间（ISO-8601 带时区） */
+    private OffsetDateTime createdTime;
 }
 
