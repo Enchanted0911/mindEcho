@@ -36,7 +36,14 @@ public enum ResultCode {
     // 支付错误 5xxx
     PAYMENT_FAILED(5001, "支付失败"),
     ORDER_NOT_FOUND(5002, "订单不存在"),
-    VIP_ALREADY_ACTIVE(5003, "会员权益已激活");
+    VIP_ALREADY_ACTIVE(5003, "会员权益已激活"),
+
+    // 积分/计费错误 6xxx
+    INSUFFICIENT_POINTS(6001, "积分不足，请充值"),
+    POINT_ACCOUNT_NOT_FOUND(6002, "积分账户不存在"),
+    POINT_DEDUCT_FAILED(6003, "积分扣除失败，请重试"),
+    DUPLICATE_SETTLEMENT(6004, "重复结算，已忽略"),
+    POINT_ORDER_NOT_FOUND(6005, "积分充值订单不存在");
 
     private final Integer code;
     private final String message;

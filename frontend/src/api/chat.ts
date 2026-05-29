@@ -1,4 +1,4 @@
-import {del, get, post} from '../utils/request'
+import {BASE_URL, del, get, post} from '../utils/request'
 
 export interface ChatSession {
   id: string   // 后端 Long 序列化为字符串，防止 JS 精度丢失
@@ -94,7 +94,6 @@ function createSseRequest(
   onError: (err: any) => void
 ): UniApp.RequestTask {
   const token = uni.getStorageSync('token')
-  const baseUrl = 'http://localhost:8080/api'
 
   // ⚠️ TextDecoder 必须在整个连接生命周期内共享同一个实例，并开启 stream:true。
   // 中文字符在 UTF-8 下占 3 个字节，网络分包时可能被截断到相邻 chunk 边界。
@@ -144,8 +143,12 @@ function createSseRequest(
           if (data) {
             onChunk(data)
           }
-        } else if (line.startsWith('event:') && line.includes('done')) {
-          triggerDone()
+        } else if (line.startsWith('event:')) {
+          // 精确匹配 "event: done"，避免误匹配含 "done" 的其他事件名（如 "event: not-done"）
+          const eventName = line.slice(6).trim()
+          if (eventName === 'done') {
+            triggerDone()
+          }
         }
       }
     }
@@ -153,7 +156,7 @@ function createSseRequest(
 
   // uni.request 返回 RequestTask，通过它注册 onChunkReceived
   const requestTask = uni.request({
-    url: `${baseUrl}${path}`,
+    url: `${BASE_URL}${path}`,
     method: 'POST',
     data,
     header: {
@@ -164,8 +167,9 @@ function createSseRequest(
     enableChunked: true,
     responseType: 'arraybuffer',
     success: () => {
-      // 请求结束：flush decoder 剩余字节，再处理缓冲区残留帧，最后触发 done
-      const remaining = decoder.decode(new ArrayBuffer(0))
+      // 请求结束：flush decoder 剩余字节（不传 stream:true，触发最终解码），再处理缓冲区残留帧，最后触发 done
+      // 注意：decode() 不带参数或传空 Uint8Array（不带 stream:true）会 flush 内部缓冲区
+      const remaining = decoder.decode(new Uint8Array(0))
       if (remaining) {
         sseBuffer += remaining
         flushBuffer()

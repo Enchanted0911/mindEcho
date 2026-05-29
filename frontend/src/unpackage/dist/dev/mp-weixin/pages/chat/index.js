@@ -179,14 +179,17 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           chatStore.updateStreamingMessage(aiMsgId, chunk);
           scrollToMsg();
         },
-        () => {
+        async () => {
           chatStore.finishStreaming(aiMsgId);
           chatStore.setActiveRequestTask(null);
           loadSessions(true);
+          if (chatStore.currentSessionId) {
+            await refreshLatestMessages(chatStore.currentSessionId);
+          }
           scrollToMsg();
         },
         (err) => {
-          common_vendor.index.__f__("error", "at pages/chat/index.vue:249", "SSE error:", err);
+          common_vendor.index.__f__("error", "at pages/chat/index.vue:254", "SSE error:", err);
           chatStore.finishStreaming(aiMsgId);
           chatStore.setActiveRequestTask(null);
           common_vendor.index.showToast({ title: "AI 回复失败，请重试", icon: "none" });
@@ -198,7 +201,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       try {
         await api_chat.stopStreaming();
       } catch (e) {
-        common_vendor.index.__f__("error", "at pages/chat/index.vue:265", "Stop streaming failed:", e);
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:270", "Stop streaming failed:", e);
       }
       if (chatStore.activeRequestTask) {
         chatStore.activeRequestTask.abort();
@@ -234,9 +237,15 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       if (!newText || !editTargetMsgId.value || !chatStore.currentSessionId)
         return;
       showEditPopup.value = false;
-      chatStore.updateMessageContent(editTargetMsgId.value, newText);
-      chatStore.removeMessagesAfter(editTargetMsgId.value);
+      chatStore.removeMessageFrom(editTargetMsgId.value);
       scrollToMsg();
+      const editUserMsgId = `user_edit_${Date.now()}`;
+      chatStore.addMessage({
+        id: editUserMsgId,
+        role: "user",
+        content: newText,
+        createdAt: Date.now()
+      });
       const aiMsgId = `ai_edit_${Date.now()}`;
       chatStore.addMessage({
         id: aiMsgId,
@@ -254,20 +263,41 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           chatStore.updateStreamingMessage(aiMsgId, chunk);
           scrollToMsg();
         },
-        () => {
+        async () => {
           chatStore.finishStreaming(aiMsgId);
           chatStore.setActiveRequestTask(null);
           loadSessions(true);
+          if (chatStore.currentSessionId) {
+            await refreshLatestMessages(chatStore.currentSessionId);
+          }
           scrollToMsg();
         },
         (err) => {
-          common_vendor.index.__f__("error", "at pages/chat/index.vue:342", "Edit SSE error:", err);
+          common_vendor.index.__f__("error", "at pages/chat/index.vue:360", "Edit SSE error:", err);
           chatStore.finishStreaming(aiMsgId);
           chatStore.setActiveRequestTask(null);
           common_vendor.index.showToast({ title: "重新发送失败，请重试", icon: "none" });
         }
       );
       chatStore.startStreaming(aiMsgId, task);
+    }
+    async function refreshLatestMessages(sessionId) {
+      try {
+        const result = await api_chat.getMessageList(sessionId, 1, 20);
+        if (result.records && result.records.length > 0) {
+          const newMsgs = [...result.records].reverse().map((msg) => ({
+            id: String(msg.id),
+            role: msg.role,
+            content: msg.content,
+            emotion: msg.emotion,
+            riskLevel: msg.riskLevel,
+            createdAt: utils_emotion.parseDate(msg.createdTime).getTime()
+          }));
+          chatStore.replaceTrailingMessages(newMsgs, 1, result.pages ?? 1);
+        }
+      } catch (e) {
+        common_vendor.index.__f__("warn", "at pages/chat/index.vue:392", "refreshLatestMessages failed:", e);
+      }
     }
     function scrollToMsg() {
       common_vendor.nextTick$1(() => {

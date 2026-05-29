@@ -7,6 +7,13 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
   setup(__props) {
     const userStore = store_user.useUserStore();
     const isLoading = common_vendor.ref(false);
+    const STARS = Array.from({ length: 30 }, () => ({
+      left: Math.random() * 100 + "%",
+      top: Math.random() * 100 + "%",
+      animationDelay: Math.random() * 3 + "s",
+      width: Math.random() * 2 + 1 + "px",
+      height: Math.random() * 2 + 1 + "px"
+    }));
     async function handleLogin() {
       if (isLoading.value)
         return;
@@ -24,7 +31,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         userStore.setUserInfo(response.userInfo);
         common_vendor.index.switchTab({ url: "/pages/chat/index" });
       } catch (error) {
-        common_vendor.index.__f__("error", "at pages/login/index.vue:33", "Login error:", error);
+        common_vendor.index.__f__("error", "at pages/login/index.vue:45", "Login error:", error);
         const msg = (error == null ? void 0 : error.errMsg) || "";
         if (msg.includes("cancel") || msg.includes("deny")) {
           isLoading.value = false;
@@ -41,21 +48,17 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     }
     return (_ctx, _cache) => {
       return common_vendor.e({
-        a: common_vendor.f(30, (i, k0, i0) => {
+        a: common_vendor.f(common_vendor.unref(STARS), (star, i, i0) => {
           return {
-            a: i
+            a: i,
+            b: common_vendor.s(star)
           };
         }),
-        b: Math.random() * 100 + "%",
-        c: Math.random() * 100 + "%",
-        d: Math.random() * 3 + "s",
-        e: Math.random() * 2 + 1 + "px",
-        f: Math.random() * 2 + 1 + "px",
-        g: !isLoading.value
+        b: !isLoading.value
       }, !isLoading.value ? {} : {}, {
-        h: isLoading.value,
-        i: isLoading.value,
-        j: common_vendor.o(handleLogin, "6e")
+        c: isLoading.value,
+        d: isLoading.value,
+        e: common_vendor.o(handleLogin, "9a")
       });
     };
   }

@@ -43,8 +43,53 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       { emoji: "✨", title: "全部人格", desc: "解锁所有 AI 人格切换" },
       { emoji: "🎯", title: "深度陪伴", desc: "更精准的情绪理解和回复" }
     ];
+    common_vendor.onMounted(() => {
+      const cached = common_vendor.index.getStorageSync("userInfo");
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (userStore.userInfo && parsed) {
+            userStore.setUserInfo(parsed);
+          }
+        } catch (_) {
+        }
+      }
+    });
+    function pollOrderStatus(orderNo, maxAttempts = 10, intervalMs = 2e3) {
+      return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const poll = async () => {
+          attempts++;
+          try {
+            const order = await api_payment.getOrder(orderNo);
+            if (order.status === "paid") {
+              resolve();
+              return;
+            }
+            if (attempts >= maxAttempts) {
+              reject(new Error("支付确认超时，请稍后在订单记录中查看"));
+              return;
+            }
+            setTimeout(poll, intervalMs);
+          } catch (e) {
+            reject(e);
+          }
+        };
+        setTimeout(poll, intervalMs);
+      });
+    }
+    function refreshUserVipStatus(expireTime) {
+      if (!userStore.userInfo)
+        return;
+      const updated = {
+        ...userStore.userInfo,
+        isVip: true,
+        vipExpireTime: expireTime ?? null
+      };
+      userStore.setUserInfo(updated);
+    }
     async function handleBuy() {
-      var _a;
+      var _a, _b;
       if (isLoading.value)
         return;
       isLoading.value = true;
@@ -52,15 +97,23 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         const order = await api_payment.createOrder(selectedPlan.value);
         if (order.wxPayParams) {
           await api_payment.wxPay(order.wxPayParams);
-          common_vendor.index.showToast({ title: "支付成功，会员已激活！", icon: "success" });
+          common_vendor.index.showToast({ title: "支付处理中...", icon: "loading", duration: 15e3 });
+          try {
+            await pollOrderStatus(order.orderNo);
+            const paidOrder = await api_payment.getOrder(order.orderNo);
+            refreshUserVipStatus(paidOrder.expireTime);
+            common_vendor.index.showToast({ title: "会员已激活！", icon: "success" });
+          } catch (_pollErr) {
+            common_vendor.index.showToast({ title: "支付已提交，稍后刷新查看会员状态", icon: "none", duration: 3e3 });
+          }
         } else {
           common_vendor.index.showToast({ title: "订单创建成功，等待支付接入", icon: "none" });
         }
       } catch (e) {
-        if ((_a = e.errMsg) == null ? void 0 : _a.includes("cancel")) {
+        if (((_a = e.errMsg) == null ? void 0 : _a.includes("cancel")) || ((_b = e.errMsg) == null ? void 0 : _b.includes("用户取消"))) {
           common_vendor.index.showToast({ title: "已取消支付", icon: "none" });
         } else {
-          common_vendor.index.showToast({ title: "支付失败，请重试", icon: "none" });
+          common_vendor.index.showToast({ title: e.message || "支付失败，请重试", icon: "none" });
         }
       } finally {
         isLoading.value = false;

@@ -1,5 +1,6 @@
 package com.mindecho.module.prompt.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mindecho.module.memory.entity.Memory;
 import com.mindecho.module.memory.mapper.MemoryMapper;
 import com.mindecho.module.personality.entity.AiPersonality;
@@ -79,7 +80,12 @@ public class PromptService {
      * 优先展示 AI 生成的跨会话摘要（summary），其次展示用户画像（profile）
      */
     private String buildMemoryContext(Long userId) {
-        List<Memory> memories = memoryMapper.findByUserId(userId);
+        List<Memory> memories = memoryMapper.selectList(
+                new LambdaQueryWrapper<Memory>()
+                        .eq(Memory::getUserId, userId)
+                        .eq(Memory::getDeleted, 0)
+                        .orderByDesc(Memory::getImportanceScore)
+        );
         if (memories == null || memories.isEmpty()) {
             return "";
         }

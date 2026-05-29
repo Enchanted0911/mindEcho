@@ -7,6 +7,10 @@ if (!Math) {
   "./pages/login/index.js";
   "./pages/chat/index.js";
   "./pages/diary/index.js";
+  "./pages/astrology/index.js";
+  "./pages/astrology/natal.js";
+  "./pages/astrology/synastry.js";
+  "./pages/astrology/transit.js";
   "./pages/me/index.js";
   "./pages/vip/index.js";
 }

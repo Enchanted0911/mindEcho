@@ -71,10 +71,31 @@ const useChatStore = common_vendor.defineStore("chat", () => {
       messages.value = messages.value.slice(0, idx + 1);
     }
   }
+  function removeMessageFrom(messageId) {
+    const idx = messages.value.findIndex((m) => m.id === messageId);
+    if (idx !== -1) {
+      messages.value = messages.value.slice(0, idx);
+    }
+  }
   function hasMoreMessages() {
     if (msgTotalPages.value === -1)
       return true;
     return msgPage.value < msgTotalPages.value;
+  }
+  function replaceTrailingMessages(newMsgs, newPage, newTotalPages) {
+    var _a;
+    if (newMsgs.length === 0)
+      return;
+    const firstRealId = (_a = newMsgs[0]) == null ? void 0 : _a.id;
+    const cutIdx = messages.value.findIndex(
+      (m) => m.id === firstRealId || !m.id.startsWith("user_") && !m.id.startsWith("ai_") && !m.id.startsWith("ai_edit_")
+    );
+    const olderMsgs = cutIdx > 0 ? messages.value.slice(0, cutIdx) : [];
+    const existingIds = new Set(newMsgs.map((m) => m.id));
+    const deduped = olderMsgs.filter((m) => !existingIds.has(m.id));
+    messages.value = [...deduped, ...newMsgs];
+    msgPage.value = newPage;
+    msgTotalPages.value = newTotalPages;
   }
   function setSessions(list, totalPages = 1) {
     sessions.value = list;
@@ -121,7 +142,9 @@ const useChatStore = common_vendor.defineStore("chat", () => {
     setEditingMessageId,
     updateMessageContent,
     removeMessagesAfter,
+    removeMessageFrom,
     hasMoreMessages,
+    replaceTrailingMessages,
     setSessions,
     appendSessions,
     hasMoreSessions

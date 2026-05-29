@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import {ref} from 'vue'
-import {createOrder, wxPay} from '../../api/payment'
+import {onMounted, ref} from 'vue'
+import {createOrder, getOrder, wxPay} from '../../api/payment'
 import {useUserStore} from '../../store/user'
 
 const userStore = useUserStore()
@@ -44,6 +44,66 @@ const VIP_BENEFITS = [
   { emoji: '🎯', title: '深度陪伴', desc: '更精准的情绪理解和回复' }
 ]
 
+// 页面加载时刷新用户最新 VIP 状态（从本地存储恢复）
+onMounted(() => {
+  const cached = uni.getStorageSync('userInfo')
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached)
+      // 用缓存中最新的 isVip 状态更新 store（登录后可能 VIP 已到期）
+      if (userStore.userInfo && parsed) {
+        userStore.setUserInfo(parsed)
+      }
+    } catch (_) { /* ignore */ }
+  }
+})
+
+/**
+ * 轮询订单状态，最多等待 maxAttempts * intervalMs 毫秒
+ * 当订单变为 paid 时 resolve，超时或出错时 reject
+ * 使用 setTimeout 递归而非 setInterval，确保前一次请求完成后再发下一次，避免请求堆积
+ */
+function pollOrderStatus(orderNo: string, maxAttempts = 10, intervalMs = 2000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let attempts = 0
+
+    const poll = async () => {
+      attempts++
+      try {
+        const order = await getOrder(orderNo)
+        if (order.status === 'paid') {
+          resolve()
+          return
+        }
+        if (attempts >= maxAttempts) {
+          reject(new Error('支付确认超时，请稍后在订单记录中查看'))
+          return
+        }
+        // 前一次请求完成后再等待 intervalMs 发起下一次
+        setTimeout(poll, intervalMs)
+      } catch (e) {
+        reject(e)
+      }
+    }
+
+    // 首次延迟 intervalMs 后开始轮询（给微信支付回调一点处理时间）
+    setTimeout(poll, intervalMs)
+  })
+}
+
+/**
+ * 支付成功后更新本地 userStore 的 VIP 状态
+ */
+function refreshUserVipStatus(expireTime?: string) {
+  if (!userStore.userInfo) return
+  const updated = {
+    ...userStore.userInfo,
+    isVip: true,
+    vipExpireTime: expireTime ?? null
+  }
+  userStore.setUserInfo(updated)
+}
+
 async function handleBuy() {
   if (isLoading.value) return
   isLoading.value = true
@@ -52,18 +112,30 @@ async function handleBuy() {
     const order = await createOrder(selectedPlan.value)
 
     if (order.wxPayParams) {
+      // 调起微信支付
       await wxPay(order.wxPayParams)
-      uni.showToast({ title: '支付成功，会员已激活！', icon: 'success' })
-      // TODO: 刷新用户信息
+
+      // 微信支付 success 回调仅代表用户操作完成，需轮询服务端确认真正到账
+      uni.showToast({ title: '支付处理中...', icon: 'loading', duration: 15000 })
+      try {
+        await pollOrderStatus(order.orderNo)
+        // 轮询到 paid，刷新 VIP 状态
+        const paidOrder = await getOrder(order.orderNo)
+        refreshUserVipStatus(paidOrder.expireTime)
+        uni.showToast({ title: '会员已激活！', icon: 'success' })
+      } catch (_pollErr: any) {
+        // 轮询超时不代表支付失败，可能是回调延迟
+        uni.showToast({ title: '支付已提交，稍后刷新查看会员状态', icon: 'none', duration: 3000 })
+      }
     } else {
-      // 开发环境，支付参数未配置
+      // 开发环境：微信支付 SDK 未接入，订单创建成功即视为完成
       uni.showToast({ title: '订单创建成功，等待支付接入', icon: 'none' })
     }
   } catch (e: any) {
-    if (e.errMsg?.includes('cancel')) {
+    if (e.errMsg?.includes('cancel') || e.errMsg?.includes('用户取消')) {
       uni.showToast({ title: '已取消支付', icon: 'none' })
     } else {
-      uni.showToast({ title: '支付失败，请重试', icon: 'none' })
+      uni.showToast({ title: e.message || '支付失败，请重试', icon: 'none' })
     }
   } finally {
     isLoading.value = false

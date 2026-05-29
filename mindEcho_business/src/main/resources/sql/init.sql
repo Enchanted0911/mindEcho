@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS `user` (
     `avatar`          VARCHAR(255)          DEFAULT NULL COMMENT '头像URL',
     `vip_expire_time` DATETIME              DEFAULT NULL COMMENT 'VIP到期时间',
     `ai_personality`     VARCHAR(32)  NOT NULL DEFAULT 'gentle_female' COMMENT '当前AI人格',
+    `birth_city`      VARCHAR(100)          DEFAULT NULL COMMENT '出生城市名称',
+    `birth_lat`       DOUBLE                DEFAULT NULL COMMENT '出生地纬度',
+    `birth_lng`       DOUBLE                DEFAULT NULL COMMENT '出生地经度',
+    `birth_time`      VARCHAR(20)           DEFAULT NULL COMMENT '出生时间 yyyy-MM-dd HH:mm',
     `deleted`         TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除 0=未删除 1=已删除',
     `created_time`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -167,4 +171,100 @@ CREATE TABLE IF NOT EXISTS `vip_order` (
     UNIQUE KEY `uk_order_no` (`order_no`),
     KEY `idx_user_id` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '会员订单表';
+
+-- ─────────────────────── 积分计费系统 ───────────────────────
+
+-- 积分充值订单表
+CREATE TABLE IF NOT EXISTS `point_order` (
+    `id`             BIGINT         NOT NULL COMMENT '订单ID',
+    `user_id`        BIGINT         NOT NULL COMMENT '用户ID',
+    `order_no`       VARCHAR(64)    NOT NULL COMMENT '订单号（PT开头）',
+    `amount`         DECIMAL(10, 2) NOT NULL COMMENT '支付金额（元）',
+    `points`         BIGINT         NOT NULL COMMENT '充值积分数（= amount * 100）',
+    `package_type`   VARCHAR(32)    NOT NULL COMMENT '积分套餐: small/medium/large/extra_large',
+    `status`         VARCHAR(32)    NOT NULL DEFAULT 'pending' COMMENT '状态: pending/paid/cancelled/refunded',
+    `pay_channel`    VARCHAR(32)             DEFAULT 'wechat' COMMENT '支付方式: wechat/alipay',
+    `prepay_id`      VARCHAR(128)            DEFAULT NULL COMMENT '微信prepay_id',
+    `transaction_id` VARCHAR(128)            DEFAULT NULL COMMENT '微信transaction_id',
+    `deleted`        TINYINT        NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    `created_time`   DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time`   DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_order_no` (`order_no`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_status` (`status`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '积分充值订单表';
+
+-- 用户积分账户表
+-- 每个用户唯一一条记录，记录可用余额、冻结余额和累计统计
+CREATE TABLE IF NOT EXISTS `user_point_account` (
+    `id`             BIGINT   NOT NULL COMMENT '账户ID',
+    `user_id`        BIGINT   NOT NULL COMMENT '用户ID（唯一）',
+    `balance`        BIGINT   NOT NULL DEFAULT 0 COMMENT '可用积分余额',
+    `frozen_balance` BIGINT   NOT NULL DEFAULT 0 COMMENT '冻结积分（预扣中，待结算）',
+    `total_recharge` BIGINT   NOT NULL DEFAULT 0 COMMENT '累计充值积分',
+    `total_consume`  BIGINT   NOT NULL DEFAULT 0 COMMENT '累计消费积分',
+    `total_refund`   BIGINT   NOT NULL DEFAULT 0 COMMENT '累计退回积分',
+    `total_gift`     BIGINT   NOT NULL DEFAULT 0 COMMENT '累计系统赠送积分',
+    `deleted`        TINYINT  NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    `created_time`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`),
+    KEY `idx_balance` (`balance`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户积分账户表';
+
+-- 积分流水表
+-- 记录每一次积分变动，支持对账和回溯
+CREATE TABLE IF NOT EXISTS `point_transaction` (
+    `id`             BIGINT       NOT NULL COMMENT '流水ID',
+    `transaction_no` VARCHAR(64)  NOT NULL COMMENT '流水号（唯一，幂等键）',
+    `user_id`        BIGINT       NOT NULL COMMENT '用户ID',
+    `amount`         BIGINT       NOT NULL COMMENT '变动积分（正=增加，负=减少）',
+    `type`           VARCHAR(32)  NOT NULL COMMENT '类型: RECHARGE/PRE_DEDUCT/CONSUME/REFUND/SYSTEM_GIFT/ADMIN_ADJUST',
+    `before_balance` BIGINT       NOT NULL DEFAULT 0 COMMENT '变动前可用余额',
+    `after_balance`  BIGINT       NOT NULL DEFAULT 0 COMMENT '变动后可用余额',
+    `business_id`    BIGINT                DEFAULT NULL COMMENT '关联业务ID（ai_usage_record.id 或 point_order.id 等）',
+    `remark`         VARCHAR(255)          DEFAULT NULL COMMENT '备注',
+    `status`         VARCHAR(32)  NOT NULL DEFAULT 'success' COMMENT '状态: success/failed/reversed',
+    `created_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_transaction_no` (`transaction_no`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_type` (`type`),
+    KEY `idx_created_time` (`created_time`),
+    KEY `idx_business_id` (`business_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '积分流水表';
+
+-- AI 使用量记录表
+-- 记录每次 AI 调用的 token 消耗和积分计费详情
+CREATE TABLE IF NOT EXISTS `ai_usage_record` (
+    `id`                    BIGINT       NOT NULL COMMENT '记录ID',
+    `request_id`            VARCHAR(64)  NOT NULL COMMENT '请求唯一ID（幂等键，防重复结算）',
+    `user_id`               BIGINT       NOT NULL COMMENT '用户ID',
+    `session_id`            BIGINT                DEFAULT NULL COMMENT '关联会话ID（chat_session.id）',
+    `business_type`         VARCHAR(32)  NOT NULL COMMENT '业务类型: CHAT/ASTROLOGY_NATAL/ASTROLOGY_SYNASTRY/ASTROLOGY_TRANSIT',
+    `model_name`            VARCHAR(64)  NOT NULL COMMENT '使用的模型名称',
+    `prompt_tokens`         INT                   DEFAULT 0 COMMENT '输入token数',
+    `completion_tokens`     INT                   DEFAULT 0 COMMENT '输出token数',
+    `total_tokens`          INT                   DEFAULT 0 COMMENT '总token数',
+    `context_tokens`        INT                   DEFAULT 0 COMMENT '上下文token数（用于阶梯计费）',
+    `estimated_points`      BIGINT                DEFAULT 0 COMMENT '预估积分（含安全缓冲，实际预扣量）',
+    `actual_points`         BIGINT                DEFAULT NULL COMMENT '实际消费积分（结算后）',
+    `base_points`           BIGINT                DEFAULT 0 COMMENT '基础费用（积分）',
+    `context_points`        BIGINT                DEFAULT 0 COMMENT '上下文阶梯费用（积分）',
+    `model_multiplier`      INT                   DEFAULT 100 COMMENT '模型倍率（*100存储，100=1x, 150=1.5x, 300=3x）',
+    `status`                VARCHAR(32)  NOT NULL DEFAULT 'PRE_DEDUCTED' COMMENT '状态: PRE_DEDUCTED/PROCESSING/SUCCESS/FAILED/REFUNDED',
+    `streaming_interrupted` TINYINT      NOT NULL DEFAULT 0 COMMENT '是否streaming中断（1=是）',
+    `created_time`          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time`          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_request_id` (`request_id`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_session_id` (`session_id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_business_type` (`business_type`),
+    KEY `idx_created_time` (`created_time`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'AI使用量记录表（token消耗和积分计费）';
 

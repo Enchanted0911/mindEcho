@@ -1,6 +1,9 @@
 package com.mindecho.module.emotion.service;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.mindecho.common.enums.EmotionEnum;
+import com.mindecho.module.chat.entity.ChatMessage;
+import com.mindecho.module.chat.mapper.ChatMessageMapper;
 import com.mindecho.module.emotion.dto.EmotionAnalyzeRequest;
 import com.mindecho.module.emotion.dto.EmotionAnalyzeResponse;
 import com.mindecho.module.emotion.entity.EmotionRecord;
@@ -9,6 +12,7 @@ import com.mindecho.module.risk.service.RiskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
@@ -23,6 +27,7 @@ public class EmotionService {
     private final ChatClient chatClient;
     private final EmotionRecordMapper emotionRecordMapper;
     private final RiskService riskService;
+    private final ChatMessageMapper chatMessageMapper;
 
     private static final String EMOTION_ANALYZE_PROMPT = """
             请分析以下文本表达的主要情绪，从以下情绪类别中选择最符合的一个，只返回英文代码，不要有任何其他内容：
@@ -55,6 +60,31 @@ public class EmotionService {
                 .emotion(emotionCode)
                 .riskLevel(riskLevel)
                 .build();
+    }
+
+    /**
+     * 异步情绪分析并更新聊天消息记录
+     *
+     * <p>由 ChatService 在保存用户消息后调用，完全在后台线程执行，
+     * 不阻塞 SSE 首字节响应时间。</p>
+     *
+     * @param messageId 需要更新情绪字段的聊天消息 ID
+     * @param text      待分析文本
+     */
+    @Async
+    public void analyzeEmotionAsync(Long messageId, String text) {
+        try {
+            String emotionCode = analyzeEmotion(text);
+            // 只更新 emotion 字段，避免读取整条消息再写回
+            chatMessageMapper.update(null,
+                    new LambdaUpdateWrapper<ChatMessage>()
+                            .eq(ChatMessage::getId, messageId)
+                            .eq(ChatMessage::getDeleted, 0)
+                            .set(ChatMessage::getEmotion, emotionCode)
+            );
+        } catch (Exception e) {
+            log.warn("Async emotion analysis failed for messageId={}: {}", messageId, e.getMessage());
+        }
     }
 
     /**

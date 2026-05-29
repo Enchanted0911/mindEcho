@@ -47,8 +47,20 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         h: common_vendor.o(($event) => common_vendor.index.switchTab({
           url: "/pages/chat/index"
         }), "e7"),
-        i: common_vendor.o(goToVip, "55"),
-        j: common_vendor.o(handleLogout, "e4")
+        i: common_vendor.o(($event) => common_vendor.index.switchTab({
+          url: "/pages/astrology/index"
+        }), "c6"),
+        j: common_vendor.o(($event) => common_vendor.index.navigateTo({
+          url: "/pages/astrology/natal"
+        }), "7b"),
+        k: common_vendor.o(($event) => common_vendor.index.navigateTo({
+          url: "/pages/astrology/synastry"
+        }), "56"),
+        l: common_vendor.o(($event) => common_vendor.index.navigateTo({
+          url: "/pages/astrology/transit"
+        }), "73"),
+        m: common_vendor.o(goToVip, "ae"),
+        n: common_vendor.o(handleLogout, "6a")
       });
     };
   }

@@ -238,11 +238,16 @@ async function sendMessage() {
       chatStore.updateStreamingMessage(aiMsgId, chunk)
       scrollToMsg()
     },
-    () => {
+    async () => {
       chatStore.finishStreaming(aiMsgId)
       chatStore.setActiveRequestTask(null)
       // 发送完成后刷新会话列表（标题可能更新了）
       loadSessions(true)
+      // 重新拉取最新一页消息，用后端真实 ID 替换前端临时 ID
+      // 确保后续编辑功能可以拿到有效的 messageId
+      if (chatStore.currentSessionId) {
+        await refreshLatestMessages(chatStore.currentSessionId)
+      }
       scrollToMsg()
     },
     (err) => {
@@ -308,10 +313,19 @@ async function confirmEdit() {
 
   showEditPopup.value = false
 
-  // 前端先同步：更新该消息内容，删除其后所有消息
-  chatStore.updateMessageContent(editTargetMsgId.value, newText)
-  chatStore.removeMessagesAfter(editTargetMsgId.value)
+  // 前端先同步：删除该消息及其之后的所有消息（与后端 deleteFromTime 语义对齐）
+  // 后端会将被编辑的消息连同后续一并删除，再由 sendMessage 重新写入
+  chatStore.removeMessageFrom(editTargetMsgId.value)
   scrollToMsg()
+
+  // 先添加用户新消息气泡（占位，后续刷新时会被真实 ID 替换）
+  const editUserMsgId = `user_edit_${Date.now()}`
+  chatStore.addMessage({
+    id: editUserMsgId,
+    role: 'user',
+    content: newText,
+    createdAt: Date.now()
+  })
 
   // 添加 AI 回复占位（流式）
   const aiMsgId = `ai_edit_${Date.now()}`
@@ -332,10 +346,14 @@ async function confirmEdit() {
       chatStore.updateStreamingMessage(aiMsgId, chunk)
       scrollToMsg()
     },
-    () => {
+    async () => {
       chatStore.finishStreaming(aiMsgId)
       chatStore.setActiveRequestTask(null)
       loadSessions(true)
+      // 重新拉取最新一页消息，用后端真实 ID 替换前端临时 ID
+      if (chatStore.currentSessionId) {
+        await refreshLatestMessages(chatStore.currentSessionId)
+      }
       scrollToMsg()
     },
     (err) => {
@@ -346,6 +364,33 @@ async function confirmEdit() {
     }
   )
   chatStore.startStreaming(aiMsgId, task)
+}
+
+/**
+ * SSE 完成后静默刷新最新一页消息
+ * 用后端返回的真实 ID 替换前端发送时生成的临时 ID（如 user_xxx / ai_xxx）
+ * 这样后续的编辑操作可以拿到有效的 messageId 传给后端
+ */
+async function refreshLatestMessages(sessionId: string) {
+  try {
+    const result = await getMessageList(sessionId, 1, 20)
+    if (result.records && result.records.length > 0) {
+      // 只替换列表尾部（最新 N 条），避免覆盖用户已向上加载的历史消息
+      const newMsgs = [...result.records].reverse().map(msg => ({
+        id: String(msg.id),
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        emotion: msg.emotion,
+        riskLevel: msg.riskLevel,
+        createdAt: parseDate(msg.createdTime).getTime()
+      }))
+      // 通过 store 方法更新消息列表，避免直接操作 reactive 数组
+      chatStore.replaceTrailingMessages(newMsgs, 1, result.pages ?? 1)
+    }
+  } catch (e) {
+    // 刷新失败不影响主流程，静默忽略
+    console.warn('refreshLatestMessages failed:', e)
+  }
 }
 
 // ── 工具函数 ─────────────────────────────────────────────

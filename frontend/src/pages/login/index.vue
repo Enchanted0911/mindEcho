@@ -6,6 +6,18 @@ import {useUserStore} from '../../store/user'
 const userStore = useUserStore()
 const isLoading = ref(false)
 
+/**
+ * 预先生成固定的星星位置，避免在模板中使用 Math.random()
+ * 模板中的表达式在每次重渲染时都会重新求值，导致星星位置闪烁
+ */
+const STARS = Array.from({ length: 30 }, () => ({
+  left: Math.random() * 100 + '%',
+  top: Math.random() * 100 + '%',
+  animationDelay: Math.random() * 3 + 's',
+  width: (Math.random() * 2 + 1) + 'px',
+  height: (Math.random() * 2 + 1) + 'px'
+}))
+
 async function handleLogin() {
   if (isLoading.value) return
   isLoading.value = true
@@ -50,15 +62,9 @@ async function handleLogin() {
 
 <template>
   <view class="login-page">
-    <!-- 背景星空效果 -->
+    <!-- 背景星空效果（使用预先生成的固定位置，避免重渲染时闪烁） -->
     <view class="stars-bg">
-      <view v-for="i in 30" :key="i" class="star" :style="{
-        left: Math.random() * 100 + '%',
-        top: Math.random() * 100 + '%',
-        animationDelay: Math.random() * 3 + 's',
-        width: (Math.random() * 2 + 1) + 'px',
-        height: (Math.random() * 2 + 1) + 'px'
-      }" />
+      <view v-for="(star, i) in STARS" :key="i" class="star" :style="star" />
     </view>
 
     <!-- Logo 区域 -->

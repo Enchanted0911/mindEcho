@@ -35,6 +35,22 @@ public class User {
     @TableField("ai_personality")
     private String aiPersonality;
 
+    /** 出生城市名称 */
+    @TableField("birth_city")
+    private String birthCity;
+
+    /** 出生地纬度 */
+    @TableField("birth_lat")
+    private Double birthLat;
+
+    /** 出生地经度 */
+    @TableField("birth_lng")
+    private Double birthLng;
+
+    /** 出生时间（格式：yyyy-MM-dd HH:mm，如 1995-08-15 14:30） */
+    @TableField("birth_time")
+    private String birthTime;
+
     /** 逻辑删除 */
     @TableLogic
     @TableField("deleted")

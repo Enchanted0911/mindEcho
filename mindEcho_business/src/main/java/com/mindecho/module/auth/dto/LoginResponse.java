@@ -37,6 +37,14 @@ public class LoginResponse {
         private Boolean isVip;
         private String vipExpireTime;
         private String aiPersonality;
+        /** 出生城市 */
+        private String birthCity;
+        /** 出生地纬度 */
+        private Double birthLat;
+        /** 出生地经度 */
+        private Double birthLng;
+        /** 出生时间 yyyy-MM-dd HH:mm */
+        private String birthTime;
     }
 }
 

@@ -1,6 +1,7 @@
 package com.mindecho.module.chat.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mindecho.common.enums.RiskLevelEnum;
@@ -9,6 +10,8 @@ import com.mindecho.common.exception.BusinessException;
 import com.mindecho.common.result.ResultCode;
 import com.mindecho.module.auth.entity.User;
 import com.mindecho.module.auth.mapper.UserMapper;
+import com.mindecho.module.billing.entity.AiUsageRecord;
+import com.mindecho.module.billing.service.BillingService;
 import com.mindecho.module.chat.dto.ChatMessageDTO;
 import com.mindecho.module.chat.dto.ChatSessionDTO;
 import com.mindecho.module.chat.dto.EditMessageRequest;
@@ -35,13 +38,23 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 聊天服务（核心模块）
+ *
+ * <p>集成了积分计费系统：
+ * <ul>
+ *   <li>发送消息前：预估上下文 token，执行预扣积分</li>
+ *   <li>Streaming 完成后：获取真实 token 用量，执行最终结算</li>
+ *   <li>AI 异常时：全额退回预扣积分</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -57,9 +70,14 @@ public class ChatService {
     private final EmotionService emotionService;
     private final MemoryService memoryService;
     private final PersonalityService personalityService;
+    private final BillingService billingService;
 
     @Value("${mindecho.free-daily-messages:10}")
     private Integer freeDailyMessages;
+
+    /** 预估输出 token 数（用于预扣计算，max-tokens 设置的值） */
+    @Value("${spring.ai.openai.chat.options.max-tokens:2048}")
+    private int maxTokens;
 
     /**
      * 用户当前活跃的 SSE 连接（userId -> emitter）
@@ -75,6 +93,11 @@ public class ChatService {
 
     /**
      * 发送消息（SSE 流式返回）
+     *
+     * <p>计费流程：
+     * 1. 计算上下文 token 估算 → 预扣积分
+     * 2. 调用 AI → 流式返回
+     * 3. 完成后根据真实 usage 最终结算
      */
     public SseEmitter sendMessage(Long userId, SendMessageRequest request) {
         // 1. 获取用户信息
@@ -99,17 +122,38 @@ public class ChatService {
         ChatMessage userMsg = saveMessage(session.getId(), userId, RoleEnum.USER.getCode(),
                 request.getMessage(), null, riskLevel.getCode());
 
-        // 6. 情绪分析（异步）
-        String emotion = emotionService.analyzeEmotion(request.getMessage());
-        userMsg.setEmotion(emotion);
-        chatMessageMapper.updateById(userMsg);
+        // 6. 情绪分析（完全异步，不阻塞 SSE 响应）
+        final Long msgId = userMsg.getId();
+        final String msgContent = request.getMessage();
+        emotionService.analyzeEmotionAsync(msgId, msgContent);
 
         // 7. 构建 Prompt 消息列表
         List<Message> messages = buildMessages(userId, session, request.getMessage());
 
-        // 8. SSE 流式输出
+        // 8. 计算上下文 token 估算（用于预扣）
+        int estimatedContextTokens = estimateContextTokens(messages);
+
+        // 9. 预扣积分（计费启用时）
+        AiUsageRecord usageRecord = null;
+        try {
+            usageRecord = billingService.initUsageAndPreDeduct(userId, session.getId(),
+                    "CHAT", estimatedContextTokens);
+        } catch (BusinessException e) {
+            if (ResultCode.INSUFFICIENT_POINTS.getCode().equals(e.getCode())) {
+                throw e;
+            }
+            // 其他计费异常不阻断聊天，记录日志继续
+            log.error("Billing pre-deduct failed, continue chat: userId={}", userId, e);
+        }
+
+        // 10. SSE 流式输出
         SseEmitter emitter = new SseEmitter(60000L);
         StringBuilder fullResponse = new StringBuilder();
+
+        // token 统计（从 ChatResponse metadata 中累积）
+        final AtomicInteger totalPromptTokens = new AtomicInteger(0);
+        final AtomicInteger totalCompletionTokens = new AtomicInteger(0);
+        final AtomicReference<AiUsageRecord> usageRef = new AtomicReference<>(usageRecord);
 
         // 注册停止标志，重置为 false（新请求覆盖旧标志）
         AtomicBoolean stopFlag = new AtomicBoolean(false);
@@ -127,6 +171,8 @@ public class ChatService {
             stopFlagMap.remove(finalUserId, stopFlag);
         });
 
+        final AiUsageRecord finalUsageRecord = usageRecord;
+
         try {
             chatClient.prompt()
                     .messages(messages)
@@ -138,23 +184,60 @@ public class ChatService {
                                 if (stopFlag.get()) {
                                     return;
                                 }
-                                String text = chunk.getResult().getOutput().getText();
-                                if (text != null && !text.isEmpty()) {
-                                    fullResponse.append(text);
-                                    try {
-                                        emitter.send(SseEmitter.event().data(text, MediaType.TEXT_PLAIN));
-                                    } catch (IOException e) {
-                                        log.error("SSE send error", e);
-                                        emitter.completeWithError(e);
+
+                                // 提取文本内容
+                                if (chunk.getResult() != null && chunk.getResult().getOutput() != null) {
+                                    String text = chunk.getResult().getOutput().getText();
+                                    if (text != null && !text.isEmpty()) {
+                                        fullResponse.append(text);
+                                        try {
+                                            emitter.send(SseEmitter.event().data(text, MediaType.TEXT_PLAIN));
+                                        } catch (IllegalStateException e) {
+                                            // emitter 已被 stopStreaming() 关闭，停止发送
+                                            log.debug("SSE send: emitter already completed, stop sending");
+                                            return;
+                                        } catch (IOException e) {
+                                            log.error("SSE send error", e);
+                                            try {
+                                                emitter.completeWithError(e);
+                                            } catch (IllegalStateException ignored) {
+                                                // ignore
+                                            }
+                                        }
                                     }
+                                }
+
+                                // 从每个 chunk 的 metadata 累积 token 使用量
+                                // DeepSeek/OpenAI 在最后一个 chunk 才会返回完整 usage
+                                try {
+                                    if (chunk.getMetadata() != null && chunk.getMetadata().getUsage() != null) {
+                                        var usage = chunk.getMetadata().getUsage();
+                                        if (usage.getPromptTokens() != null && usage.getPromptTokens() > 0) {
+                                            totalPromptTokens.set(usage.getPromptTokens().intValue());
+                                        }
+                                        if (usage.getCompletionTokens() != null && usage.getCompletionTokens() > 0) {
+                                            totalCompletionTokens.set(usage.getCompletionTokens().intValue());
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    // token 统计失败不影响业务
+                                    log.debug("Token usage extraction failed: {}", e.getMessage());
                                 }
                             },
                             error -> {
                                 log.error("AI chat error", error);
-                                emitter.completeWithError(error);
+                                // AI 异常：退回积分
+                                if (finalUsageRecord != null) {
+                                    billingService.failAndRefund(finalUsageRecord.getId(), finalUserId);
+                                }
+                                try {
+                                    emitter.completeWithError(error);
+                                } catch (IllegalStateException e) {
+                                    log.debug("SSE error callback: emitter already completed");
+                                }
                             },
                             () -> {
-                                // 保存 AI 回复（无论是否被截断，都保存已生成的内容）
+                                // 保存 AI 回复
                                 if (!fullResponse.isEmpty()) {
                                     saveMessage(session.getId(), userId, RoleEnum.ASSISTANT.getCode(),
                                             fullResponse.toString(), null, RiskLevelEnum.LOW.getCode());
@@ -163,22 +246,59 @@ public class ChatService {
                                 // 更新会话标题（第一条消息）
                                 updateSessionTitle(session, request.getMessage());
 
-                                // 异步提取记忆（仅在正常完成时，非停止截断时）
+                                // 异步提取记忆
                                 if (!stopFlag.get()) {
                                     memoryService.extractAndSaveMemoryAsync(userId, request.getMessage(), fullResponse.toString());
+                                }
+
+                                // 积分结算（异步）
+                                if (finalUsageRecord != null) {
+                                    int promptTk = totalPromptTokens.get();
+                                    int completionTk = totalCompletionTokens.get();
+
+                                    if (stopFlag.get()) {
+                                        // 用户主动中断：按已产生内容计费
+                                        // completion token 估算（使用已生成内容字符数 / 4 粗估）
+                                        int estimatedCompletion = fullResponse.length() / 4;
+                                        billingService.handleStreamingInterrupt(
+                                                finalUsageRecord.getId(), finalUserId,
+                                                promptTk > 0 ? promptTk : estimatedContextTokens,
+                                                completionTk > 0 ? completionTk : estimatedCompletion);
+                                    } else {
+                                        // 正常完成：结算
+                                        if (promptTk == 0) {
+                                            // 没有获取到真实 token，使用估算值
+                                            promptTk = estimatedContextTokens;
+                                            completionTk = fullResponse.length() / 4;
+                                            log.debug("No token usage from response, using estimated: prompt={}, completion={}",
+                                                    promptTk, completionTk);
+                                        }
+                                        billingService.settleUsage(finalUsageRecord.getId(), finalUserId,
+                                                promptTk, completionTk);
+                                    }
                                 }
 
                                 try {
                                     emitter.send(SseEmitter.event().name("done").data("[DONE]", MediaType.TEXT_PLAIN));
                                     emitter.complete();
+                                } catch (IllegalStateException e) {
+                                    // emitter 已被 stopStreaming() 关闭，忽略
+                                    log.debug("SSE done event: emitter already completed");
                                 } catch (IOException e) {
                                     log.error("SSE done event send error", e);
-                                    emitter.completeWithError(e);
+                                    try {
+                                        emitter.completeWithError(e);
+                                    } catch (IllegalStateException ignored) {
+                                        // emitter 已关闭，忽略
+                                    }
                                 }
                             }
                     );
         } catch (Exception e) {
             log.error("Chat error", e);
+            if (finalUsageRecord != null) {
+                billingService.failAndRefund(finalUsageRecord.getId(), userId);
+            }
             emitter.completeWithError(e);
         }
 
@@ -190,7 +310,6 @@ public class ChatService {
      * 高风险消息同样需要获取或创建会话，确保消息被正确归档
      */
     private SseEmitter handleHighRiskMessage(Long userId, SendMessageRequest request) {
-        // 保存高风险消息记录：获取或创建会话后保存
         try {
             User user = userMapper.selectById(userId);
             String personality = user != null ? user.getAiPersonality() : personalityService.getDefaultCode();
@@ -205,9 +324,11 @@ public class ChatService {
         SseEmitter emitter = new SseEmitter(5000L);
 
         try {
-            // 逐字符流式输出安全话术
-            for (String part : safetyResponse.split("")) {
-                emitter.send(SseEmitter.event().data(part, MediaType.TEXT_PLAIN));
+            // 按标点或固定长度分块发送，避免逐字发送导致的性能问题
+            int chunkSize = 10;
+            for (int i = 0; i < safetyResponse.length(); i += chunkSize) {
+                String chunk = safetyResponse.substring(i, Math.min(i + chunkSize, safetyResponse.length()));
+                emitter.send(SseEmitter.event().data(chunk, MediaType.TEXT_PLAIN));
             }
             emitter.send(SseEmitter.event().name("done").data("[DONE]", MediaType.TEXT_PLAIN));
             emitter.complete();
@@ -220,32 +341,31 @@ public class ChatService {
 
     /**
      * 构建消息列表（System Prompt + 记忆 + 历史）
-     *
-     * <p>Prompt Cache 优化策略（DeepSeek prefix cache）：
-     * <ul>
-     *   <li>第一条 SystemMessage：静态人格 Prompt，内容固定，DeepSeek 可稳定缓存前缀</li>
-     *   <li>第二条 SystemMessage（可选）：动态记忆上下文，每次可能不同，放在静态后面</li>
-     *   <li>历史消息 + 当前输入：追加在最后</li>
-     * </ul>
-     * DeepSeek 会自动对 ≥64 tokens 的公共前缀进行缓存，命中时 prompt token 费用降低 90%。
      */
     private List<Message> buildMessages(Long userId, ChatSession session, String userInput) {
         List<Message> messages = new ArrayList<>();
 
-        // 1. 静态 System Prompt（人格设定，内容稳定，便于 prefix cache 命中）
         String staticPrompt = promptService.buildStaticSystemPrompt(session.getAiPersonality());
         messages.add(new SystemMessage(staticPrompt));
 
-        // 2. 动态记忆上下文（跨会话摘要 + 用户画像，每次对话可能变化）
-        //    单独作为第二条 SystemMessage，不污染静态前缀
         String memoryPrompt = promptService.buildMemorySystemPrompt(userId);
         if (memoryPrompt != null && !memoryPrompt.isBlank()) {
             messages.add(new SystemMessage(memoryPrompt));
         }
 
-        // 3. 最近 10 条历史消息
-        List<ChatMessage> history = chatMessageMapper.findRecentMessages(session.getId(), 10);
-        for (ChatMessage msg : history) {
+        // 查询会话最近 10 条消息（按时间倒序取，返回正序）
+        List<ChatMessage> history = chatMessageMapper.selectList(
+                new LambdaQueryWrapper<ChatMessage>()
+                        .eq(ChatMessage::getSessionId, session.getId())
+                        .eq(ChatMessage::getDeleted, 0)
+                        .orderByDesc(ChatMessage::getCreatedTime)
+                        .last("LIMIT 10")
+        );
+        // 倒序查出来需要反转以得到时间正序
+        List<ChatMessage> orderedHistory = new ArrayList<>(history);
+        java.util.Collections.reverse(orderedHistory);
+
+        for (ChatMessage msg : orderedHistory) {
             if (RoleEnum.USER.getCode().equals(msg.getRole())) {
                 messages.add(new UserMessage(msg.getContent()));
             } else if (RoleEnum.ASSISTANT.getCode().equals(msg.getRole())) {
@@ -253,10 +373,24 @@ public class ChatService {
             }
         }
 
-        // 4. 当前用户输入
         messages.add(new UserMessage(userInput));
 
         return messages;
+    }
+
+    /**
+     * 预估消息列表的上下文 token 数（粗算：字符数 / 4）
+     * 实际计费时会以模型返回的真实 promptTokens 为准
+     */
+    private int estimateContextTokens(List<Message> messages) {
+        int totalChars = 0;
+        for (Message msg : messages) {
+            if (msg.getText() != null) {
+                totalChars += msg.getText().length();
+            }
+        }
+        // 中文字符平均约 2 token，英文约 4 字符/token，取折中 3 字符/token
+        return Math.max(totalChars / 3, 100);
     }
 
     /**
@@ -276,7 +410,6 @@ public class ChatService {
             return session;
         }
 
-        // 创建新会话
         ChatSession session = new ChatSession();
         session.setUserId(userId);
         session.setTitle("新对话");
@@ -321,7 +454,14 @@ public class ChatService {
         if (user.isVip()) {
             return;
         }
-        Long todayCount = chatMessageMapper.countTodayMessages(userId);
+        // 统计用户今日消息数（role = 'user' 且 created_time 为今天）
+        Long todayCount = chatMessageMapper.selectCount(
+                new LambdaQueryWrapper<ChatMessage>()
+                        .eq(ChatMessage::getUserId, userId)
+                        .eq(ChatMessage::getRole, RoleEnum.USER.getCode())
+                        .apply("DATE(created_time) = CURDATE()")
+                        .eq(ChatMessage::getDeleted, 0)
+        );
         if (todayCount >= freeDailyMessages) {
             throw new BusinessException(ResultCode.DAILY_LIMIT_EXCEEDED);
         }
@@ -332,7 +472,12 @@ public class ChatService {
      */
     public IPage<ChatSessionDTO> getSessionList(Long userId, Integer page, Integer size) {
         Page<ChatSession> pageParam = new Page<>(page, size);
-        IPage<ChatSession> sessionPage = chatSessionMapper.pageByUserId(pageParam, userId);
+        IPage<ChatSession> sessionPage = chatSessionMapper.selectPage(pageParam,
+                new LambdaQueryWrapper<ChatSession>()
+                        .eq(ChatSession::getUserId, userId)
+                        .eq(ChatSession::getDeleted, 0)
+                        .orderByDesc(ChatSession::getUpdatedTime)
+        );
 
         return sessionPage.convert(session -> ChatSessionDTO.builder()
                 .id(session.getId())
@@ -344,13 +489,9 @@ public class ChatService {
     }
 
     /**
-     * 分页获取会话消息列表（按时间倒序，前端向上滚动时懒加载更早的消息）
-     *
-     * <p>第 1 页返回最新 N 条消息；前端向上滚动到顶时请求第 2、3... 页拉取更早消息。
-     * 返回结果仍按时间倒序排列，前端接收后需反转为正序展示。
+     * 分页获取会话消息列表
      */
     public IPage<ChatMessageDTO> getMessageList(Long userId, Long sessionId, Integer page, Integer size) {
-        // 校验会话归属，防止越权查询
         ChatSession session = chatSessionMapper.selectOne(
                 new LambdaQueryWrapper<ChatSession>()
                         .eq(ChatSession::getId, sessionId)
@@ -362,7 +503,12 @@ public class ChatService {
         }
 
         Page<ChatMessage> pageParam = new Page<>(page, size);
-        IPage<ChatMessage> msgPage = chatMessageMapper.pageBySessionId(pageParam, sessionId);
+        IPage<ChatMessage> msgPage = chatMessageMapper.selectPage(pageParam,
+                new LambdaQueryWrapper<ChatMessage>()
+                        .eq(ChatMessage::getSessionId, sessionId)
+                        .eq(ChatMessage::getDeleted, 0)
+                        .orderByDesc(ChatMessage::getCreatedTime)
+        );
 
         return msgPage.convert(msg -> ChatMessageDTO.builder()
                 .id(msg.getId())
@@ -376,7 +522,8 @@ public class ChatService {
 
     /**
      * 停止当前用户的流式输出
-     * 设置停止标志后，流式回调会在下一个 chunk 检测时中断；同时直接 complete 当前 emitter
+     * 先设置 stopFlag，再尝试发送 done 并关闭 emitter。
+     * 由于 subscribe 回调线程和本方法可能并发操作 emitter，所有操作均需捕获 IllegalStateException。
      */
     public void stopStreaming(Long userId) {
         AtomicBoolean stopFlag = stopFlagMap.get(userId);
@@ -386,24 +533,26 @@ public class ChatService {
         SseEmitter emitter = activeSseMap.get(userId);
         if (emitter != null) {
             try {
-                // 发送 done 事件让前端知道流已结束，再完成 emitter
                 emitter.send(SseEmitter.event().name("done").data("[DONE]", MediaType.TEXT_PLAIN));
+                emitter.complete();
+            } catch (IllegalStateException e) {
+                // emitter 已经被 subscribe 回调线程关闭，忽略
+                log.debug("Stop streaming: emitter already completed, userId={}", userId);
             } catch (Exception e) {
                 log.warn("Stop streaming: send done event failed, userId={}", userId, e);
+                try {
+                    emitter.complete();
+                } catch (Exception ignored) {
+                    // ignore
+                }
             }
-            emitter.complete();
         }
     }
 
     /**
      * 编辑用户消息并重新发送
-     * 流程：校验消息归属 -> 删除该消息本身及之后的所有消息 -> 以新内容重新发送
-     *
-     * <p>注意：不再单独更新消息内容，而是将被编辑的消息连同后续消息一并删除，
-     * 再调用 sendMessage 重新写入，避免产生重复消息记录。
      */
     public SseEmitter editMessage(Long userId, EditMessageRequest request) {
-        // 1. 校验消息归属（必须是当前用户的、指定会话中的、未删除的 user 角色消息）
         ChatMessage message = chatMessageMapper.selectOne(
                 new LambdaQueryWrapper<ChatMessage>()
                         .eq(ChatMessage::getId, request.getMessageId())
@@ -416,12 +565,16 @@ public class ChatService {
             throw new BusinessException(ResultCode.MESSAGE_NOT_FOUND);
         }
 
-        // 2. 删除该消息本身及之后（created_time >= 该消息时间）的所有消息
-        //    包含：被编辑的用户消息 + 其对应的 AI 回复 + 后续所有对话
-        //    由 sendMessage 统一写入新的用户消息，避免重复记录
-        chatMessageMapper.deleteFromTime(request.getSessionId(), message.getCreatedTime());
+        // 逻辑删除指定消息本身及之后（创建时间 >= fromTime）的所有消息
+        LocalDateTime fromTime = message.getCreatedTime();
+        chatMessageMapper.update(null,
+                new LambdaUpdateWrapper<ChatMessage>()
+                        .eq(ChatMessage::getSessionId, request.getSessionId())
+                        .ge(ChatMessage::getCreatedTime, fromTime)
+                        .eq(ChatMessage::getDeleted, 0)
+                        .set(ChatMessage::getDeleted, 1)
+        );
 
-        // 3. 以新内容重新发送（复用 sendMessage 流程，sessionId 已存在）
         SendMessageRequest sendRequest = new SendMessageRequest();
         sendRequest.setSessionId(request.getSessionId());
         sendRequest.setMessage(request.getMessage());
@@ -429,12 +582,9 @@ public class ChatService {
     }
 
     /**
-     * 删除会话（逻辑删除），同时级联逻辑删除该会话下的所有消息
-     * 使用 deleteById 触发 MyBatis Plus @TableLogic 机制，自动将 deleted 置为 1
-     * 注意：不可用 setDeleted(1) + updateById，@TableLogic 字段在 updateById 中会被忽略
+     * 删除会话（逻辑删除）
      */
     public void deleteSession(Long userId, Long sessionId) {
-        // 先校验归属，防止越权删除
         ChatSession session = chatSessionMapper.selectOne(
                 new LambdaQueryWrapper<ChatSession>()
                         .eq(ChatSession::getId, sessionId)
@@ -443,10 +593,14 @@ public class ChatService {
         if (session == null) {
             throw new BusinessException(ResultCode.SESSION_NOT_FOUND);
         }
-        // deleteById 会执行 UPDATE chat_session SET deleted=1 WHERE id=?
         chatSessionMapper.deleteById(sessionId);
-        // 级联逻辑删除该会话下的所有消息
-        chatMessageMapper.deleteBySessionId(sessionId);
+        // 逻辑删除指定会话下的所有消息（级联删除）
+        chatMessageMapper.update(null,
+                new LambdaUpdateWrapper<ChatMessage>()
+                        .eq(ChatMessage::getSessionId, sessionId)
+                        .eq(ChatMessage::getDeleted, 0)
+                        .set(ChatMessage::getDeleted, 1)
+        );
     }
 }
 

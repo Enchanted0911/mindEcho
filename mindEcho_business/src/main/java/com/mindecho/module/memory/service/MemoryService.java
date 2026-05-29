@@ -1,5 +1,6 @@
 package com.mindecho.module.memory.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mindecho.module.memory.entity.Memory;
 import com.mindecho.module.memory.mapper.MemoryMapper;
 import lombok.RequiredArgsConstructor;
@@ -75,7 +76,12 @@ public class MemoryService {
      * 获取用户的相关记忆（供 PromptService 注入 System Prompt）
      */
     public List<Memory> recallRelevantMemories(Long userId, String query) {
-        return memoryMapper.findByUserId(userId);
+        return memoryMapper.selectList(
+                new LambdaQueryWrapper<Memory>()
+                        .eq(Memory::getUserId, userId)
+                        .eq(Memory::getDeleted, 0)
+                        .orderByDesc(Memory::getImportanceScore)
+        );
     }
 
     /**
@@ -83,7 +89,13 @@ public class MemoryService {
      */
     public Memory saveMemory(Long userId, String type, String content, Integer importanceScore) {
         // 简单查重：同类型同内容不重复存
-        List<Memory> existing = memoryMapper.findByUserIdAndType(userId, type);
+        List<Memory> existing = memoryMapper.selectList(
+                new LambdaQueryWrapper<Memory>()
+                        .eq(Memory::getUserId, userId)
+                        .eq(Memory::getMemoryType, type)
+                        .eq(Memory::getDeleted, 0)
+                        .orderByDesc(Memory::getImportanceScore)
+        );
         for (Memory mem : existing) {
             if (mem.getContent().equals(content)) {
                 return mem;
@@ -119,7 +131,14 @@ public class MemoryService {
         saveMemory(userId, "event", eventContent, 5);
 
         // 3. 判断是否需要触发摘要压缩
-        List<Memory> events = memoryMapper.findByUserIdAndType(userId, "event");
+        // 按创建时间正序排列，确保摘要内容的时间顺序正确
+        List<Memory> events = memoryMapper.selectList(
+                new LambdaQueryWrapper<Memory>()
+                        .eq(Memory::getUserId, userId)
+                        .eq(Memory::getMemoryType, "event")
+                        .eq(Memory::getDeleted, 0)
+                        .orderByAsc(Memory::getCreatedTime)
+        );
         if (events.size() >= summaryThreshold) {
             triggerSummaryCompression(userId, events);
         }
@@ -134,7 +153,12 @@ public class MemoryService {
     private void triggerSummaryCompression(Long userId, List<Memory> events) {
         try {
             // 获取已有摘要
-            List<Memory> summaries = memoryMapper.findByUserIdAndType(userId, "summary");
+            List<Memory> summaries = memoryMapper.selectList(
+                    new LambdaQueryWrapper<Memory>()
+                            .eq(Memory::getUserId, userId)
+                            .eq(Memory::getMemoryType, "summary")
+                            .eq(Memory::getDeleted, 0)
+            );
             String existingSummary = summaries.isEmpty() ? "（暂无历史摘要）" : summaries.get(0).getContent();
 
             // 拼接最新 event 片段

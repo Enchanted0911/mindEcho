@@ -1,5 +1,6 @@
 package com.mindecho.module.diary.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -43,7 +44,12 @@ public class DiaryService {
         LocalDate date = request.getDiaryDate() != null ? request.getDiaryDate() : LocalDate.now();
 
         // 查找是否已有当天日记
-        DiaryEntry existing = diaryEntryMapper.findByUserIdAndDate(userId, date);
+        DiaryEntry existing = diaryEntryMapper.selectOne(
+                new LambdaQueryWrapper<DiaryEntry>()
+                        .eq(DiaryEntry::getUserId, userId)
+                        .eq(DiaryEntry::getDiaryDate, date)
+                        .eq(DiaryEntry::getDeleted, 0)
+        );
 
         if (existing != null) {
             // 更新：使用 LambdaUpdateWrapper 强制将 ai_summary 置为 null
@@ -103,8 +109,14 @@ public class DiaryService {
                     .call()
                     .content();
 
-            entry.setAiSummary(summary);
-            diaryEntryMapper.updateById(entry);
+            if (StringUtils.hasText(summary)) {
+                entry.setAiSummary(summary);
+                // 只更新 ai_summary 字段，避免 updateById 覆盖其他字段或受 @TableLogic 影响
+                LambdaUpdateWrapper<DiaryEntry> wrapper = new LambdaUpdateWrapper<DiaryEntry>()
+                        .eq(DiaryEntry::getId, entry.getId())
+                        .set(DiaryEntry::getAiSummary, summary);
+                diaryEntryMapper.update(null, wrapper);
+            }
         } catch (Exception e) {
             log.error("AI summary generation failed", e);
         }
@@ -117,7 +129,12 @@ public class DiaryService {
      */
     public IPage<DiaryEntryDTO> getDiaryList(Long userId, Integer page, Integer size) {
         Page<DiaryEntry> pageParam = new Page<>(page, size);
-        IPage<DiaryEntry> entryPage = diaryEntryMapper.pageByUserId(pageParam, userId);
+        IPage<DiaryEntry> entryPage = diaryEntryMapper.selectPage(pageParam,
+                new LambdaQueryWrapper<DiaryEntry>()
+                        .eq(DiaryEntry::getUserId, userId)
+                        .eq(DiaryEntry::getDeleted, 0)
+                        .orderByDesc(DiaryEntry::getDiaryDate)
+        );
         return entryPage.convert(this::convertToDTO);
     }
 
@@ -125,7 +142,12 @@ public class DiaryService {
      * 获取某天的日记
      */
     public DiaryEntryDTO getDiaryByDate(Long userId, LocalDate date) {
-        DiaryEntry entry = diaryEntryMapper.findByUserIdAndDate(userId, date);
+        DiaryEntry entry = diaryEntryMapper.selectOne(
+                new LambdaQueryWrapper<DiaryEntry>()
+                        .eq(DiaryEntry::getUserId, userId)
+                        .eq(DiaryEntry::getDiaryDate, date)
+                        .eq(DiaryEntry::getDeleted, 0)
+        );
         return entry != null ? convertToDTO(entry) : null;
     }
 

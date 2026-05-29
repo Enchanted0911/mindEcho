@@ -8,6 +8,14 @@ export interface UserInfo {
   isVip: boolean
   vipExpireTime: string | null
   aiPersonality: string
+  /** 出生城市名称 */
+  birthCity?: string | null
+  /** 出生地纬度 */
+  birthLat?: number | null
+  /** 出生地经度 */
+  birthLng?: number | null
+  /** 出生时间 yyyy-MM-dd HH:mm */
+  birthTime?: string | null
 }
 
 export const useUserStore = defineStore('user', () => {
@@ -43,6 +51,16 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  function updateBirthInfo(birthCity: string, birthLat: number | null, birthLng: number | null, birthTime: string) {
+    if (userInfo.value) {
+      userInfo.value.birthCity = birthCity
+      userInfo.value.birthLat = birthLat
+      userInfo.value.birthLng = birthLng
+      userInfo.value.birthTime = birthTime
+      uni.setStorageSync('userInfo', JSON.stringify(userInfo.value))
+    }
+  }
+
   return {
     token,
     userInfo,
@@ -52,7 +70,8 @@ export const useUserStore = defineStore('user', () => {
     setToken,
     setUserInfo,
     logout,
-    updatePersonality
+    updatePersonality,
+    updateBirthInfo
   }
 })
 

@@ -7,8 +7,8 @@ import com.mindecho.common.util.JwtUtil;
 import com.mindecho.common.util.UserContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -21,11 +21,16 @@ import java.nio.charset.StandardCharsets;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
+
+    public AuthInterceptor(JwtUtil jwtUtil,
+                           @Qualifier("webObjectMapper") ObjectMapper objectMapper) {
+        this.jwtUtil = jwtUtil;
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {

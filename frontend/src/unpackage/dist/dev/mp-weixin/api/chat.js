@@ -21,7 +21,6 @@ function createSseConnection(sessionId, message, onChunk, onDone, onError) {
 }
 function createSseRequest(path, data, onChunk, onDone, onError) {
   const token = common_vendor.index.getStorageSync("token");
-  const baseUrl = "http://localhost:8080/api";
   const decoder = new TextDecoder("utf-8", { fatal: false });
   let sseBuffer = "";
   let doneTriggered = false;
@@ -46,14 +45,17 @@ function createSseRequest(path, data, onChunk, onDone, onError) {
           if (data2) {
             onChunk(data2);
           }
-        } else if (line.startsWith("event:") && line.includes("done")) {
-          triggerDone();
+        } else if (line.startsWith("event:")) {
+          const eventName = line.slice(6).trim();
+          if (eventName === "done") {
+            triggerDone();
+          }
         }
       }
     }
   };
   const requestTask = common_vendor.index.request({
-    url: `${baseUrl}${path}`,
+    url: `${utils_request.BASE_URL}${path}`,
     method: "POST",
     data,
     header: {
@@ -64,7 +66,7 @@ function createSseRequest(path, data, onChunk, onDone, onError) {
     enableChunked: true,
     responseType: "arraybuffer",
     success: () => {
-      const remaining = decoder.decode(new ArrayBuffer(0));
+      const remaining = decoder.decode(new Uint8Array(0));
       if (remaining) {
         sseBuffer += remaining;
         flushBuffer();
@@ -81,7 +83,7 @@ function createSseRequest(path, data, onChunk, onDone, onError) {
       sseBuffer += text;
       flushBuffer();
     } catch (e) {
-      common_vendor.index.__f__("error", "at api/chat.ts:189", "Chunk parse error:", e);
+      common_vendor.index.__f__("error", "at api/chat.ts:193", "Chunk parse error:", e);
     }
   });
   return requestTask;

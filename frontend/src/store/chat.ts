@@ -114,7 +114,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  /** 删除指定消息之后的所有消息（编辑时同步前端状态） */
+  /** 删除指定消息之后的所有消息（不含自身，历史兼容保留） */
   function removeMessagesAfter(messageId: string) {
     const idx = messages.value.findIndex(m => m.id === messageId)
     if (idx !== -1) {
@@ -122,10 +122,38 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /** 删除指定消息本身及之后的所有消息（与后端 deleteFromTime >= 语义对齐） */
+  function removeMessageFrom(messageId: string) {
+    const idx = messages.value.findIndex(m => m.id === messageId)
+    if (idx !== -1) {
+      messages.value = messages.value.slice(0, idx)
+    }
+  }
+
   /** 是否还有更多历史消息可加载 */
   function hasMoreMessages(): boolean {
     if (msgTotalPages.value === -1) return true   // 未知，允许尝试
     return msgPage.value < msgTotalPages.value
+  }
+
+  /**
+   * 用真实消息列表替换消息尾部（SSE 完成后刷新时使用）
+   * 保留早于最早真实消息的历史记录，用新消息列表替换其余部分
+   */
+  function replaceTrailingMessages(newMsgs: ChatMessage[], newPage: number, newTotalPages: number) {
+    if (newMsgs.length === 0) return
+    const firstRealId = newMsgs[0]?.id
+    // 找到当前列表中第一个已有真实 ID（数字字符串）且与新数据对应的切割点
+    const cutIdx = messages.value.findIndex(
+      m => m.id === firstRealId || (!m.id.startsWith('user_') && !m.id.startsWith('ai_') && !m.id.startsWith('ai_edit_'))
+    )
+    const olderMsgs = cutIdx > 0 ? messages.value.slice(0, cutIdx) : []
+    // 合并旧历史 + 新真实消息，去重
+    const existingIds = new Set(newMsgs.map(m => m.id))
+    const deduped = olderMsgs.filter(m => !existingIds.has(m.id))
+    messages.value = [...deduped, ...newMsgs]
+    msgPage.value = newPage
+    msgTotalPages.value = newTotalPages
   }
 
   // ── 会话操作 ────────────────────────────────────────────
@@ -179,7 +207,9 @@ export const useChatStore = defineStore('chat', () => {
     setEditingMessageId,
     updateMessageContent,
     removeMessagesAfter,
+    removeMessageFrom,
     hasMoreMessages,
+    replaceTrailingMessages,
     setSessions,
     appendSessions,
     hasMoreSessions,

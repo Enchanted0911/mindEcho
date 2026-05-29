@@ -28,6 +28,42 @@
       }
     },
     {
+      "path": "pages/astrology/index",
+      "style": {
+        "navigationBarTitleText": "星盘",
+        "navigationBarBackgroundColor": "#0a0a18",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0a0a18"
+      }
+    },
+    {
+      "path": "pages/astrology/natal",
+      "style": {
+        "navigationBarTitleText": "本命盘",
+        "navigationBarBackgroundColor": "#0a0a18",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0a0a18"
+      }
+    },
+    {
+      "path": "pages/astrology/synastry",
+      "style": {
+        "navigationBarTitleText": "和盘",
+        "navigationBarBackgroundColor": "#080e1a",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#080e1a"
+      }
+    },
+    {
+      "path": "pages/astrology/transit",
+      "style": {
+        "navigationBarTitleText": "流运",
+        "navigationBarBackgroundColor": "#0e0a08",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#0e0a08"
+      }
+    },
+    {
       "path": "pages/me/index",
       "style": {
         "navigationBarTitleText": "我的",
@@ -63,6 +99,12 @@
         "text": "日记",
         "iconPath": "static/icons/diary.png",
         "selectedIconPath": "static/icons/diary-active.png"
+      },
+      {
+        "pagePath": "pages/astrology/index",
+        "text": "星盘",
+        "iconPath": "static/icons/astrology.png",
+        "selectedIconPath": "static/icons/astrology-active.png"
       },
       {
         "pagePath": "pages/me/index",

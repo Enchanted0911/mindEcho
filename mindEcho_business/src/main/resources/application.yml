@@ -69,7 +69,7 @@ spring:
 # MyBatis Plus 配置
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
-  type-aliases-package: com.mindecho.module.*.entity
+  type-aliases-package: com.mindecho.module.*.entity,com.mindecho.module.billing.entity
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
@@ -81,11 +81,28 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 
-# 微信小程序配置（留空）
+# 微信小程序 + 微信支付 V3 配置
 wechat:
+  # 小程序登录
   appid: ${WECHAT_APPID:}
   secret: ${WECHAT_SECRET:}
   login-url: https://api.weixin.qq.com/sns/jscode2session
+  # 微信支付 V3
+  pay:
+    # 商户号（mchid）
+    mch-id: ${WECHAT_PAY_MCH_ID:}
+    # 商户 API V3 密钥（32位，用于回调报文解密）
+    api-v3-key: ${WECHAT_PAY_API_V3_KEY:}
+    # 商户 API 证书序列号（Serial Number，在微信商户平台证书管理页查看）
+    cert-serial-no: ${WECHAT_PAY_CERT_SERIAL_NO:}
+    # 商户 API 私钥内容（apiclient_key.pem 文件内容，去掉头尾行，合并为单行）
+    private-key: ${WECHAT_PAY_PRIVATE_KEY:}
+    # 微信支付平台证书内容（下载后写入，用于验签；或配置 cert-url 动态加载）
+    platform-cert: ${WECHAT_PAY_PLATFORM_CERT:}
+    # 支付通知回调地址（公网可访问，https）
+    notify-url: ${WECHAT_PAY_NOTIFY_URL:https://your-domain.com/api/payment/wx-callback}
+    # 微信支付 V3 接口基础地址
+    base-url: https://api.mch.weixin.qq.com
 
 # JWT 配置
 jwt:
@@ -101,6 +118,39 @@ mindecho:
   free-daily-messages: 1000
   memory:
     summary-threshold: 6  # 每累积 N 轮对话触发一次 AI 摘要压缩
+
+# 积分计费配置
+billing:
+  # 是否启用计费（false = 跳过所有积分逻辑，便于开发调试）
+  enabled: ${BILLING_ENABLED:true}
+  # 基础费用（积分）
+  base-points:
+    chat: 5          # 普通聊天
+    astrology: 10    # 占星解读（高级角色）
+    voice: 20        # 语音聊天
+    image: 100       # 图片生成
+  # 上下文阶梯费用（积分）
+  context-tiers:
+    tier2k: 2        # 2k~4k token 额外积分
+    tier4k: 5        # 4k~8k token 额外积分
+    tier8k: 10       # 8k~16k token 额外积分
+    tier16k: 20      # 16k~32k token 额外积分
+  # 预扣安全缓冲
+  pre-deduct:
+    buffer-ratio: 0.3   # 安全缓冲比例（默认30%）
+    min-buffer: 10      # 最低额外缓冲积分
+  # 系统赠送
+  gift:
+    new-user: 100       # 新用户注册赠送积分（等于 1 元）
+
+# 占星服务配置
+astrology:
+  # Python 占星计算服务地址（Kubernetes Service 名称或 IP）
+  python-service:
+    base-url: ${ASTROLOGY_PYTHON_URL:http://python-astrology-service:8000}
+  # RAG 检索开关（false = 跳过 RAG，只使用 Memory + 星盘数据）
+  rag:
+    enabled: ${ASTROLOGY_RAG_ENABLED:true}
 
 # 日志配置
 logging:
