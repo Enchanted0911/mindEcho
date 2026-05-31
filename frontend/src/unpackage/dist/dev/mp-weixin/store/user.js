@@ -33,6 +33,49 @@ const useUserStore = common_vendor.defineStore("user", () => {
       common_vendor.index.setStorageSync("userInfo", JSON.stringify(userInfo.value));
     }
   }
+  function updateBirthInfo(birthCity, birthLat, birthLng, birthTime) {
+    if (userInfo.value) {
+      userInfo.value.birthCity = birthCity;
+      userInfo.value.birthLat = birthLat;
+      userInfo.value.birthLng = birthLng;
+      userInfo.value.birthTime = birthTime;
+      common_vendor.index.setStorageSync("userInfo", JSON.stringify(userInfo.value));
+    }
+  }
+  function updateSynastryPartner(partnerName, partnerCity, partnerLat, partnerLng, partnerTime) {
+    if (userInfo.value) {
+      userInfo.value.synastryPartnerName = partnerName;
+      userInfo.value.synastryPartnerCity = partnerCity;
+      userInfo.value.synastryPartnerLat = partnerLat;
+      userInfo.value.synastryPartnerLng = partnerLng;
+      userInfo.value.synastryPartnerTime = partnerTime;
+      common_vendor.index.setStorageSync("userInfo", JSON.stringify(userInfo.value));
+    }
+  }
+  function updateTransitDate(targetDate) {
+    if (userInfo.value) {
+      userInfo.value.transitTargetDate = targetDate;
+      common_vendor.index.setStorageSync("userInfo", JSON.stringify(userInfo.value));
+    }
+  }
+  function restoreFromStorage() {
+    if (token.value)
+      return true;
+    try {
+      const savedToken = common_vendor.index.getStorageSync("token");
+      const savedUserInfoStr = common_vendor.index.getStorageSync("userInfo");
+      if (savedToken) {
+        token.value = savedToken;
+        if (savedUserInfoStr) {
+          userInfo.value = JSON.parse(savedUserInfoStr);
+        }
+        return true;
+      }
+    } catch (e) {
+      common_vendor.index.__f__("warn", "at store/user.ts:132", "[userStore] restoreFromStorage failed:", e);
+    }
+    return false;
+  }
   return {
     token,
     userInfo,
@@ -42,7 +85,11 @@ const useUserStore = common_vendor.defineStore("user", () => {
     setToken,
     setUserInfo,
     logout,
-    updatePersonality
+    updatePersonality,
+    updateBirthInfo,
+    updateSynastryPartner,
+    updateTransitDate,
+    restoreFromStorage
   };
 });
 exports.useUserStore = useUserStore;

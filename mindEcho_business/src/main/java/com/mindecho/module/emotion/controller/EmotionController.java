@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.UUID;
+
 /**
  * 情绪分析 Controller
  */
@@ -28,7 +30,7 @@ public class EmotionController {
      */
     @PostMapping("/analyze")
     public Result<EmotionAnalyzeResponse> analyze(@Valid @RequestBody EmotionAnalyzeRequest request) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(emotionService.analyze(userId, request));
     }
 }

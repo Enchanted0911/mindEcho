@@ -16,20 +16,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 /**
  * 积分账户服务
- *
- * <p>负责用户积分账户的全生命周期管理：
- * <ul>
- *   <li>账户初始化（新用户注册时创建）</li>
- *   <li>预扣积分（AI 请求发起前冻结）</li>
- *   <li>最终结算（根据实际 token 扣费并退回多余积分）</li>
- *   <li>全额退回（AI 失败时）</li>
- *   <li>充值（购买积分包时增加余额）</li>
- *   <li>系统赠送（新用户礼包等）</li>
- * </ul>
- *
- * <p>所有扣费操作均在数据库事务中执行，通过 WHERE balance >= #{amount} 条件防止超扣。
  */
 @Slf4j
 @Service
@@ -44,18 +34,13 @@ public class PointAccountService {
 
     // ─────────────────────── 账户初始化 ───────────────────────
 
-    /**
-     * 获取用户积分账户，若不存在则初始化（新用户注册时调用）
-     * 初始赠送 newUserGiftPoints 积分
-     */
     @Transactional
-    public UserPointAccount getOrCreateAccount(String userId) {
+    public UserPointAccount getOrCreateAccount(UUID userId) {
         UserPointAccount account = findByUserId(userId);
         if (account != null) {
             return account;
         }
 
-        // 创建新账户
         account = new UserPointAccount();
         account.setUserId(userId);
         account.setBalance(billingConfig.getNewUserGiftPoints());
@@ -66,7 +51,6 @@ public class PointAccountService {
         account.setTotalGift(billingConfig.getNewUserGiftPoints());
         accountMapper.insert(account);
 
-        // 记录赠送流水
         if (billingConfig.getNewUserGiftPoints() > 0) {
             recordTransaction(userId, billingConfig.getNewUserGiftPoints(),
                     TransactionTypeEnum.SYSTEM_GIFT, 0L, billingConfig.getNewUserGiftPoints(),
@@ -77,10 +61,7 @@ public class PointAccountService {
         return account;
     }
 
-    /**
-     * 查询账户（不存在时自动创建）
-     */
-    public UserPointAccount getAccount(String userId) {
+    public UserPointAccount getAccount(UUID userId) {
         UserPointAccount account = findByUserId(userId);
         if (account == null) {
             return getOrCreateAccount(userId);
@@ -90,15 +71,8 @@ public class PointAccountService {
 
     // ─────────────────────── 预扣 ───────────────────────
 
-    /**
-     * 预扣积分（发起 AI 请求前调用）
-     *
-     * @param userId          用户ID（UUID 字符串）
-     * @param preDeductAmount 预扣积分数（含安全缓冲）
-     * @param usageRecordId   ai_usage_record.id（UUID 字符串）
-     */
     @Transactional
-    public void preDeduct(String userId, long preDeductAmount, String usageRecordId) {
+    public void preDeduct(UUID userId, long preDeductAmount, UUID usageRecordId) {
         if (!billingConfig.isBillingEnabled()) {
             return;
         }
@@ -141,16 +115,8 @@ public class PointAccountService {
 
     // ─────────────────────── 最终结算 ───────────────────────
 
-    /**
-     * 最终结算（AI 完成后调用）
-     *
-     * @param userId        用户ID（UUID 字符串）
-     * @param frozenAmount  预扣冻结积分数
-     * @param actualAmount  实际消费积分数
-     * @param usageRecordId ai_usage_record.id（UUID 字符串）
-     */
     @Transactional
-    public void settle(String userId, long frozenAmount, long actualAmount, String usageRecordId) {
+    public void settle(UUID userId, long frozenAmount, long actualAmount, UUID usageRecordId) {
         if (!billingConfig.isBillingEnabled()) {
             return;
         }
@@ -227,15 +193,8 @@ public class PointAccountService {
 
     // ─────────────────────── 全额退回 ───────────────────────
 
-    /**
-     * 全额退回冻结积分（AI 失败或未产生内容时）
-     *
-     * @param userId        用户ID（UUID 字符串）
-     * @param frozenAmount  需退回的冻结积分
-     * @param usageRecordId ai_usage_record.id（UUID 字符串）
-     */
     @Transactional
-    public void refundFrozen(String userId, long frozenAmount, String usageRecordId) {
+    public void refundFrozen(UUID userId, long frozenAmount, UUID usageRecordId) {
         if (!billingConfig.isBillingEnabled() || frozenAmount <= 0) {
             return;
         }
@@ -269,16 +228,8 @@ public class PointAccountService {
 
     // ─────────────────────── 充值 ───────────────────────
 
-    /**
-     * 积分充值（支付成功后调用）
-     *
-     * @param userId     用户ID（UUID 字符串）
-     * @param amount     充值积分数
-     * @param businessId 充值订单ID（UUID 字符串）
-     * @param remark     备注
-     */
     @Transactional
-    public void recharge(String userId, long amount, String businessId, String remark) {
+    public void recharge(UUID userId, long amount, UUID businessId, String remark) {
         UserPointAccount account = getAccount(userId);
         int rows = accountMapper.update(null,
                 new UpdateWrapper<UserPointAccount>()
@@ -301,11 +252,8 @@ public class PointAccountService {
         log.info("Recharge success: userId={}, amount={}, businessId={}", userId, amount, businessId);
     }
 
-    /**
-     * 系统赠送积分
-     */
     @Transactional
-    public void gift(String userId, long amount, String remark) {
+    public void gift(UUID userId, long amount, String remark) {
         UserPointAccount account = getAccount(userId);
         int rows = accountMapper.update(null,
                 new UpdateWrapper<UserPointAccount>()
@@ -323,15 +271,12 @@ public class PointAccountService {
         recordTransaction(userId, amount, TransactionTypeEnum.SYSTEM_GIFT,
                 beforeBalance, beforeBalance + amount,
                 null, remark != null ? remark : "系统赠送");
-        log.info("Gift success: userId={}, amount={}", userId, amount);
+        log.info("Gift success: userId={}", userId);
     }
 
     // ─────────────────────── 内部工具 ───────────────────────
 
-    /**
-     * 根据用户 ID 查询账户
-     */
-    private UserPointAccount findByUserId(String userId) {
+    private UserPointAccount findByUserId(UUID userId) {
         return accountMapper.selectOne(
                 new LambdaQueryWrapper<UserPointAccount>()
                         .eq(UserPointAccount::getUserId, userId)
@@ -339,12 +284,9 @@ public class PointAccountService {
         );
     }
 
-    /**
-     * 写积分流水记录
-     */
-    private void recordTransaction(String userId, long amount, TransactionTypeEnum type,
+    private void recordTransaction(UUID userId, long amount, TransactionTypeEnum type,
                                     long beforeBalance, long afterBalance,
-                                    String businessId, String remark) {
+                                    UUID businessId, String remark) {
         PointTransaction tx = new PointTransaction();
         tx.setTransactionNo(generateTransactionNo());
         tx.setUserId(userId);

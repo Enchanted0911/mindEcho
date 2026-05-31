@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 情绪日记实体
@@ -16,12 +17,12 @@ import java.time.OffsetDateTime;
 @TableName("diary_entry")
 public class DiaryEntry {
 
-    @TableId(type = IdType.ASSIGN_UUID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private UUID id;
 
     /** 用户ID */
     @TableField("user_id")
-    private String userId;
+    private UUID userId;
 
     /** 日记日期（纯日期，不含时区） */
     @TableField("diary_date")

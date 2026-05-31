@@ -2,9 +2,12 @@ package com.mindecho.module.billing.service;
 
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.mindecho.common.exception.BusinessException;
+import com.mindecho.common.result.ResultCode;
 import com.mindecho.module.billing.config.BillingConfig;
 import com.mindecho.module.billing.config.ModelBillingConfig;
 import com.mindecho.module.billing.entity.AiUsageRecord;
+import com.mindecho.module.billing.entity.UserPointAccount;
 import com.mindecho.module.billing.enums.UsageStatusEnum;
 import com.mindecho.module.billing.mapper.AiUsageRecordMapper;
 import lombok.RequiredArgsConstructor;
@@ -14,15 +17,10 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 /**
  * AI 计费服务
- *
- * <p>整合积分账户服务和 AI 用量记录，提供完整的 AI 调用计费流程：
- * <pre>
- * 1. initUsageAndPreDeduct  — 创建 usage 记录 + 预扣积分
- * 2. settleUsage            — 根据真实 token 用量最终结算
- * 3. failAndRefund          — AI 失败时全额退回
- * </pre>
  */
 @Slf4j
 @Service
@@ -38,13 +36,40 @@ public class BillingService {
     @Value("${spring.ai.openai.chat.options.model:deepseek-chat}")
     private String defaultModelName;
 
-    // ─────────────────────── 初始化 + 预扣 ───────────────────────
+    // ─────────────────────── 余额预检 ───────────────────────
 
     /**
-     * 创建 AI 使用记录并执行预扣积分
+     * 提前检查用户积分余额是否足够发起一次 AI 请求。
+     *
+     * <p>在 session / message 写入之前调用，避免因积分不足在数据库留下无效数据。
+     * 该方法仅做只读查询，不产生任何写入操作。
+     *
+     * @param userId       用户 ID
+     * @param businessType 业务类型（如 "CHAT"）
+     * @throws BusinessException INSUFFICIENT_POINTS 当余额不足时
      */
+    public void checkBalanceBeforeRequest(UUID userId, String businessType) {
+        if (!billingConfig.isBillingEnabled()) {
+            return;
+        }
+        long basePoints = getBasePoints(businessType);
+        int multiplier = modelBillingConfig.getMultiplier(defaultModelName);
+        // 使用基础积分（不含上下文阶梯费用）作为最低门槛估算，保守判断
+        long minRequired = modelBillingConfig.calcFinalPoints(basePoints, 0L, multiplier);
+        long preDeductMin = billingConfig.calcPreDeductPoints(minRequired);
+
+        UserPointAccount account = pointAccountService.getAccount(userId);
+        if (!account.hasSufficientBalance(preDeductMin)) {
+            log.warn("Pre-check insufficient balance: userId={}, balance={}, minRequired={}",
+                    userId, account.getBalance(), preDeductMin);
+            throw new BusinessException(ResultCode.INSUFFICIENT_POINTS);
+        }
+    }
+
+    // ─────────────────────── 初始化 + 预扣 ───────────────────────
+
     @Transactional(rollbackFor = Exception.class)
-    public AiUsageRecord initUsageAndPreDeduct(String userId, String sessionId,
+    public AiUsageRecord initUsageAndPreDeduct(UUID userId, UUID sessionId,
                                                 String businessType, int estimatedContextTokens) {
         if (!billingConfig.isBillingEnabled()) {
             return createUsageRecord(userId, sessionId, businessType, estimatedContextTokens, 0L, 0L);
@@ -68,11 +93,8 @@ public class BillingService {
 
     // ─────────────────────── 最终结算 ───────────────────────
 
-    /**
-     * 根据真实 token 用量最终结算积分（异步执行）
-     */
     @Async
-    public void settleUsage(String usageRecordId, String userId,
+    public void settleUsage(UUID usageRecordId, UUID userId,
                              int promptTokens, int completionTokens) {
         if (!billingConfig.isBillingEnabled()) {
             return;
@@ -86,11 +108,8 @@ public class BillingService {
 
     // ─────────────────────── 失败退回 ───────────────────────
 
-    /**
-     * AI 调用失败，全额退回预扣积分（异步执行）
-     */
     @Async
-    public void failAndRefund(String usageRecordId, String userId) {
+    public void failAndRefund(UUID usageRecordId, UUID userId) {
         if (!billingConfig.isBillingEnabled()) {
             return;
         }
@@ -101,11 +120,8 @@ public class BillingService {
         }
     }
 
-    /**
-     * Streaming 中断时按实际已产生 token 计费（异步执行）
-     */
     @Async
-    public void handleStreamingInterrupt(String usageRecordId, String userId,
+    public void handleStreamingInterrupt(UUID usageRecordId, UUID userId,
                                           int partialPromptTokens, int partialCompletionTokens) {
         if (!billingConfig.isBillingEnabled()) {
             return;
@@ -114,7 +130,7 @@ public class BillingService {
         usageRecordMapper.update(null,
                 new LambdaUpdateWrapper<AiUsageRecord>()
                         .eq(AiUsageRecord::getId, usageRecordId)
-                        .set(AiUsageRecord::getStreamingInterrupted, true)
+                        .set(AiUsageRecord::getStreamingInterrupted, 1)
         );
 
         try {
@@ -143,7 +159,7 @@ public class BillingService {
         };
     }
 
-    private AiUsageRecord createUsageRecord(String userId, String sessionId, String businessType,
+    private AiUsageRecord createUsageRecord(UUID userId, UUID sessionId, String businessType,
                                               int contextTokens, long estimatedPoints, long preDeductPoints) {
         int multiplier = modelBillingConfig.getMultiplier(defaultModelName);
         long basePoints = getBasePoints(businessType);
@@ -163,7 +179,7 @@ public class BillingService {
         usageRec.setEstimatedPoints(preDeductPoints > 0 ? preDeductPoints : estimatedPoints);
         usageRec.setActualPoints(null);
         usageRec.setStatus(UsageStatusEnum.PRE_DEDUCTED.getCode());
-        usageRec.setStreamingInterrupted(false);
+        usageRec.setStreamingInterrupted(0);
         usageRecordMapper.insert(usageRec);
         return usageRec;
     }

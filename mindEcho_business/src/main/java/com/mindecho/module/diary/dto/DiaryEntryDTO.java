@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 情绪日记 DTO
@@ -16,7 +17,7 @@ import java.time.OffsetDateTime;
 @AllArgsConstructor
 public class DiaryEntryDTO {
 
-    private String id;
+    private UUID id;
     private String diaryDate;
     private String emotion;
     private Integer emotionIntensity;

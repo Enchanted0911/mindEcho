@@ -15,6 +15,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 /**
  * JWT 认证拦截器
@@ -47,7 +48,11 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        String userId = jwtUtil.getUserId(token);
+        UUID userId = jwtUtil.getUserId(token);
+        if (userId == null) {
+            writeUnauthorized(response);
+            return false;
+        }
         UserContext.setUserId(userId);
         return true;
     }

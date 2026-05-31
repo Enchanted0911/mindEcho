@@ -1,7 +1,7 @@
 {
   "navigationBarTitleText": "流运",
-  "navigationBarBackgroundColor": "#0e0a08",
-  "navigationBarTextStyle": "white",
-  "backgroundColor": "#0e0a08",
+  "navigationBarBackgroundColor": "#f5f2ff",
+  "navigationBarTextStyle": "black",
+  "backgroundColor": "#f5f2ff",
   "usingComponents": {}
 }

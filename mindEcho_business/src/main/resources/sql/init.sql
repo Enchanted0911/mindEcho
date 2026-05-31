@@ -20,10 +20,6 @@ CREATE TABLE IF NOT EXISTS "user" (
     avatar          VARCHAR(255)    DEFAULT NULL,
     vip_expire_time TIMESTAMPTZ     DEFAULT NULL,
     ai_personality  VARCHAR(32)     NOT NULL DEFAULT 'gentle_female',
-    birth_city      VARCHAR(100)    DEFAULT NULL,
-    birth_lat       DOUBLE PRECISION DEFAULT NULL,
-    birth_lng       DOUBLE PRECISION DEFAULT NULL,
-    birth_time      VARCHAR(20)     DEFAULT NULL,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     created_time    TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_time    TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -32,6 +28,44 @@ CREATE TABLE IF NOT EXISTS "user" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_openid ON "user"(openid);
 CREATE INDEX IF NOT EXISTS idx_user_created_time ON "user"(created_time);
+
+-- ─────────────────────── 用户星盘信息表 ───────────────────────
+-- 将 user 表中与占星相关的字段独立抽取，与 user 表 1:1 关联
+-- 新增三种星盘类型的 AI 解读字段：natal_interpretation / synastry_interpretation / transit_interpretation
+
+CREATE TABLE IF NOT EXISTS user_astrology (
+    id              UUID            NOT NULL DEFAULT gen_random_uuid(),
+    user_id         UUID            NOT NULL,
+    -- 出生信息
+    birth_city              VARCHAR(100)    DEFAULT NULL,
+    birth_lat               DOUBLE PRECISION DEFAULT NULL,
+    birth_lng               DOUBLE PRECISION DEFAULT NULL,
+    birth_time              VARCHAR(20)     DEFAULT NULL,
+    -- 本命盘
+    natal_chart_data        TEXT            DEFAULT NULL,
+    natal_chart_summary     TEXT            DEFAULT NULL,
+    natal_interpretation    TEXT            DEFAULT NULL,    -- 本命盘 AI 解读文本（最近一次）
+    -- 和盘
+    synastry_chart_data     TEXT            DEFAULT NULL,
+    synastry_interpretation TEXT            DEFAULT NULL,    -- 和盘 AI 解读文本（最近一次）
+    -- 和盘：最近一次对方出生信息（方便前端下次回填）
+    synastry_partner_name   VARCHAR(64)     DEFAULT NULL,
+    synastry_partner_city   VARCHAR(100)    DEFAULT NULL,
+    synastry_partner_lat    DOUBLE PRECISION DEFAULT NULL,
+    synastry_partner_lng    DOUBLE PRECISION DEFAULT NULL,
+    synastry_partner_time   VARCHAR(20)     DEFAULT NULL,
+    -- 流运
+    transit_chart_data      TEXT            DEFAULT NULL,    -- 流运原始数据（含 date/chart/events/summary）
+    transit_interpretation  TEXT            DEFAULT NULL,    -- 流运 AI 解读文本（最近一次）
+    transit_target_date     VARCHAR(20)     DEFAULT NULL,    -- 最近一次流运查询日期（前端回填用）
+    deleted         SMALLINT        NOT NULL DEFAULT 0,
+    created_time    TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_time    TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_user_astrology_user_id ON user_astrology(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_astrology_created_time ON user_astrology(created_time);
 
 -- ─────────────────────── 聊天会话表 ───────────────────────
 
@@ -72,20 +106,26 @@ CREATE INDEX IF NOT EXISTS idx_chat_message_created_time ON chat_message(created
 -- ─────────────────────── 长期记忆表（结构化部分，pgvector 单独管理） ───────────────────────
 
 CREATE TABLE IF NOT EXISTS memory (
-    id              UUID            NOT NULL DEFAULT gen_random_uuid(),
-    user_id         UUID            NOT NULL,
-    memory_type     VARCHAR(32)     NOT NULL,   -- profile / event / emotion / summary / relationship / astrology_history
-    content         TEXT            NOT NULL,
-    importance_score INT            NOT NULL DEFAULT 5,
-    deleted         SMALLINT        NOT NULL DEFAULT 0,
-    created_time    TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_time    TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id                  UUID            NOT NULL DEFAULT gen_random_uuid(),
+    user_id             UUID            NOT NULL,
+    memory_type         VARCHAR(32)     NOT NULL,   -- FACT / PREFERENCE / GOAL / RELATIONSHIP / PROFILE / SUMMARY / CONVERSATION / EXPERIENCE / DISCUSSION
+    content             TEXT            NOT NULL,
+    importance_score    INT             NOT NULL DEFAULT 5,
+    recall_count        BIGINT          NOT NULL DEFAULT 0,           -- 召回次数（用于 frequency_norm）
+    last_recalled_time  TIMESTAMPTZ     DEFAULT NULL,                 -- 最近召回时间（用于 recency_norm）
+    memory_score        DOUBLE PRECISION DEFAULT NULL,                -- 记忆健康分 [0,1]，每日定时计算
+    deleted             SMALLINT        NOT NULL DEFAULT 0,
+    created_time        TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_time        TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_memory_user_id ON memory(user_id);
 CREATE INDEX IF NOT EXISTS idx_memory_type ON memory(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memory_user_type ON memory(user_id, memory_type);
+CREATE INDEX IF NOT EXISTS idx_memory_score ON memory(user_id, memory_score);
+-- GIN 索引支持 BM25 全文检索
+CREATE INDEX IF NOT EXISTS idx_memory_content_gin ON memory USING gin(to_tsvector('simple', content));
 
 -- ─────────────────────── 记忆向量表（pgvector / Spring AI PgVectorStore） ───────────────────────
 -- 存储 profile / emotion / summary / relationship / astrology_history 类型记忆的向量
@@ -100,11 +140,14 @@ CREATE INDEX IF NOT EXISTS idx_memory_user_type ON memory(user_id, memory_type);
 -- 业务字段（memory_id / user_id / memory_type）通过 metadata JSON 传递，由 MemoryVectorService 写入和过滤
 
 CREATE TABLE IF NOT EXISTS memory_vector (
-    id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-    content         TEXT            NOT NULL,
-    metadata        JSON            NOT NULL DEFAULT '{}',
-    embedding       vector(1024)    NOT NULL,
-    created_time    TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id                  UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    content             TEXT            NOT NULL,
+    metadata            JSON            NOT NULL DEFAULT '{}',
+    embedding           vector(1024)    NOT NULL,
+    recall_count        BIGINT          NOT NULL DEFAULT 0,           -- 召回次数（用于 frequency_norm）
+    last_recalled_time  TIMESTAMPTZ     DEFAULT NULL,                 -- 最近召回时间（用于 recency_norm）
+    memory_score        DOUBLE PRECISION DEFAULT NULL,                -- 记忆健康分 [0,1]，每日定时计算
+    created_time        TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 用于按用户过滤的函数索引（通过 metadata->>'user_id' 快速定位）
@@ -112,6 +155,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_vector_user_id
     ON memory_vector ((metadata->>'user_id'));
 CREATE INDEX IF NOT EXISTS idx_memory_vector_user_type
     ON memory_vector ((metadata->>'user_id'), (metadata->>'memory_type'));
+CREATE INDEX IF NOT EXISTS idx_memory_vector_score
+    ON memory_vector (memory_score);
 -- HNSW 近似最近邻索引（余弦距离）
 CREATE INDEX IF NOT EXISTS idx_memory_vector_hnsw
     ON memory_vector USING hnsw (embedding vector_cosine_ops)
@@ -321,4 +366,5 @@ CREATE INDEX IF NOT EXISTS idx_ai_usage_session_id ON ai_usage_record(session_id
 CREATE INDEX IF NOT EXISTS idx_ai_usage_status ON ai_usage_record(status);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_business_type ON ai_usage_record(business_type);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_created_time ON ai_usage_record(created_time);
+
 

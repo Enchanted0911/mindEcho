@@ -18,32 +18,26 @@ const userStore = useUserStore()
 const personalityStore = usePersonalityStore()
 
 const inputText = ref('')
-/** 通过切换 msg-bottom / msg-bottom-alt 强制 scroll-into-view 在值不变时也触发 */
 const scrollToBottom = ref('msg-bottom')
 let scrollToggle = false
-/** 向上加载历史消息后，滚动锚定到这条消息（保持视口位置不跳动） */
 const scrollToAnchor = ref('')
 const showSessionPanel = ref(false)
 const showPersonalityPicker = ref(false)
 const isComposing = ref(false)
 const isLoadingSessions = ref(false)
-/** 编辑浮层：显示状态、目标消息 ID 及编辑文本 */
-const showEditPopup = ref(false)
-const editTargetMsgId = ref('')
+const selectedMsgId = ref('')
+const editingMsgId = ref('')
 const editText = ref('')
 
-// ── 人格（使用全局 store，自动去重请求）────────────────────
 const personalities = computed(() => personalityStore.list)
 const femalePersonalities = computed(() => personalityStore.femaleList)
 const malePersonalities = computed(() => personalityStore.maleList)
 
 const personality = computed(() => {
   const found = personalityStore.findByCode(userStore.currentPersonality)
-  // 兜底：后端 Personality 字段是 name，不是 label
   return found ?? { code: userStore.currentPersonality, name: '心屿', emoji: '🌸', description: '', gender: 'female', style: 'gentle' }
 })
 
-// ── 消息 / 会话 ────────────────────────────────────────────
 const messages = computed(() => chatStore.messages)
 const isStreaming = computed(() => chatStore.isStreaming)
 const sessions = computed(() => chatStore.sessions)
@@ -51,7 +45,6 @@ const isLoadingMoreMsg = computed(() => chatStore.isLoadingMoreMsg)
 const isLoadingMoreSession = computed(() => chatStore.isLoadingMoreSession)
 
 onMounted(async () => {
-  // 人格列表：首次调用时请求，已加载则直接复用
   await personalityStore.ensureLoaded()
   await loadSessions(true)
   if (chatStore.currentSessionId) {
@@ -59,12 +52,6 @@ onMounted(async () => {
   }
 })
 
-// ── 会话列表（分页懒加载）─────────────────────────────────
-
-/**
- * 加载会话列表
- * @param reset true = 第一次加载（覆盖），false = 加载更多（追加）
- */
 async function loadSessions(reset = false) {
   if (!reset && (!chatStore.hasMoreSessions() || chatStore.isLoadingMoreSession)) return
 
@@ -87,28 +74,16 @@ async function loadSessions(reset = false) {
   }
 }
 
-/** 会话面板滚动到底：懒加载更多会话 */
 function onSessionScrollToLower() {
   loadSessions(false)
 }
 
-// ── 消息列表（分页懒加载）─────────────────────────────────
-
-/**
- * 将后端返回的分页消息（倒序）转为正序并写入 store
- * @param records    后端返回的倒序记录
- * @param page       当前页码
- * @param totalPages 总页数
- * @param prepend    true = 插入到头部（加载更早消息），false = 覆盖（首次加载）
- */
 function applyMessagePage(
   records: any[],
   page: number,
   totalPages: number,
   prepend: boolean
 ) {
-  // 后端按 created_time DESC 排序，第 1 页是最新消息
-  // 转为正序（时间从早到晚）再展示
   const sorted = [...records].reverse().map(msg => ({
     id: String(msg.id),
     role: msg.role as 'user' | 'assistant',
@@ -129,7 +104,6 @@ function applyMessagePage(
   }
 }
 
-/** 切换会话 / 历史：首次加载最新一页消息 */
 async function loadHistory(sessionId: string) {
   chatStore.clearMessages()
   try {
@@ -141,29 +115,24 @@ async function loadHistory(sessionId: string) {
   }
 }
 
-/** 消息区域滚动到顶：加载更早一页消息 */
 async function onMsgScrollToUpper() {
   if (!chatStore.currentSessionId) return
   if (!chatStore.hasMoreMessages() || isLoadingMoreMsg.value) return
 
   chatStore.isLoadingMoreMsg = true
   const nextPage = chatStore.msgPage + 1
-  // 记录当前最早一条消息的 id，加载完后滚回到这里
   const anchorId = messages.value[0]?.id ?? ''
 
   try {
     const result = await getMessageList(chatStore.currentSessionId, nextPage, 20)
     if (result.records.length > 0) {
       applyMessagePage(result.records, nextPage, result.pages, true)
-      // 恢复滚动位置到加载前的第一条消息
       if (anchorId) {
         await nextTick()
         scrollToAnchor.value = `msg-${anchorId}`
-        // 滚动完成后清空 anchor，避免影响后续底部滚动
         setTimeout(() => { scrollToAnchor.value = '' }, 300)
       }
     } else {
-      // 没有更多了，更新 totalPages 防止继续请求
       chatStore.msgTotalPages = chatStore.msgPage
     }
   } catch (e) {
@@ -172,8 +141,6 @@ async function onMsgScrollToUpper() {
     chatStore.isLoadingMoreMsg = false
   }
 }
-
-// ── 会话操作 ─────────────────────────────────────────────
 
 async function switchSession(sessionId: string) {
   chatStore.setCurrentSession(sessionId)
@@ -204,8 +171,6 @@ async function removeSession(sessionId: string) {
     }
   })
 }
-
-// ── 发消息 ───────────────────────────────────────────────
 
 async function sendMessage() {
   const text = inputText.value.trim()
@@ -241,10 +206,10 @@ async function sendMessage() {
     async () => {
       chatStore.finishStreaming(aiMsgId)
       chatStore.setActiveRequestTask(null)
-      // 发送完成后刷新会话列表（标题可能更新了）
-      loadSessions(true)
-      // 重新拉取最新一页消息，用后端真实 ID 替换前端临时 ID
-      // 确保后续编辑功能可以拿到有效的 messageId
+      await loadSessions(true)
+      if (!chatStore.currentSessionId && chatStore.sessions.length > 0) {
+        chatStore.setCurrentSession(chatStore.sessions[0].id)
+      }
       if (chatStore.currentSessionId) {
         await refreshLatestMessages(chatStore.currentSessionId)
       }
@@ -254,81 +219,74 @@ async function sendMessage() {
       console.error('SSE error:', err)
       chatStore.finishStreaming(aiMsgId)
       chatStore.setActiveRequestTask(null)
-      uni.showToast({ title: 'AI 回复失败，请重试', icon: 'none' })
+      const msg = (err instanceof Error && err.message) ? err.message : 'AI 回复失败，请重试'
+      uni.showToast({ title: msg, icon: 'none', duration: 3000 })
     }
   )
   chatStore.startStreaming(aiMsgId, task)
 }
 
-// ── 停止流式输出 ─────────────────────────────────────────
-
 async function handleStopStreaming() {
-  // 通知后端停止
   try {
     await stopStreaming()
   } catch (e) {
     console.error('Stop streaming failed:', e)
   }
-  // 同时中止前端请求，避免继续等待
   if (chatStore.activeRequestTask) {
     chatStore.activeRequestTask.abort()
     chatStore.setActiveRequestTask(null)
   }
-  // 更新流式状态
   if (chatStore.streamingMessageId) {
     chatStore.finishStreaming(chatStore.streamingMessageId)
   }
 }
 
-// ── 编辑消息 ─────────────────────────────────────────────
-
-/** 长按用户消息：弹出编辑浮层 */
-function onLongPressUserMsg(msgId: string, content: string) {
+function onTapUserMsg(msgId: string) {
   if (isStreaming.value) return
-  editTargetMsgId.value = msgId
+  if (selectedMsgId.value === msgId) {
+    selectedMsgId.value = ''
+    return
+  }
+  if (editingMsgId.value && editingMsgId.value !== msgId) {
+    editingMsgId.value = ''
+    editText.value = ''
+  }
+  selectedMsgId.value = msgId
+}
+
+function startInlineEdit(msgId: string, content: string) {
+  editingMsgId.value = msgId
   editText.value = content
-  showEditPopup.value = true
+  selectedMsgId.value = ''
 }
 
-/** 单击用户消息气泡：弹出操作选项（编辑/重新发送） */
-function onTapUserMsg(msgId: string, content: string) {
-  if (isStreaming.value) return
-  // 防止误触：只有点击自己的消息时才弹出
-  uni.showActionSheet({
-    itemList: ['编辑并重新发送'],
-    success: (res) => {
-      if (res.tapIndex === 0) {
-        editTargetMsgId.value = msgId
-        editText.value = content
-        showEditPopup.value = true
-      }
-    }
-  })
+function cancelInlineEdit() {
+  editingMsgId.value = ''
+  editText.value = ''
 }
 
-/** 确认编辑，调用编辑接口并重新流式输出 */
-async function confirmEdit() {
+async function confirmInlineEdit() {
   const newText = editText.value.trim()
-  if (!newText || !editTargetMsgId.value || !chatStore.currentSessionId) return
+  if (!newText || !editingMsgId.value) return
 
-  showEditPopup.value = false
+  const targetMsgId = editingMsgId.value
+  editingMsgId.value = ''
+  editText.value = ''
 
-  // 前端先同步：删除该消息及其之后的所有消息（与后端 deleteFromTime 语义对齐）
-  // 后端会将被编辑的消息连同后续一并删除，再由 sendMessage 重新写入
-  chatStore.removeMessageFrom(editTargetMsgId.value)
+  const isTemporaryMsg = targetMsgId.startsWith('user_')
+
+  chatStore.removeMessageFrom(targetMsgId)
   scrollToMsg()
 
-  // 先添加用户新消息气泡（占位，后续刷新时会被真实 ID 替换）
-  const editUserMsgId = `user_edit_${Date.now()}`
+  const newUserMsgId = `user_${Date.now()}`
   chatStore.addMessage({
-    id: editUserMsgId,
+    id: newUserMsgId,
     role: 'user',
     content: newText,
     createdAt: Date.now()
   })
 
-  // 添加 AI 回复占位（流式）
-  const aiMsgId = `ai_edit_${Date.now()}`
+  const aiMsgId = `ai_${Date.now()}`
   chatStore.addMessage({
     id: aiMsgId,
     role: 'assistant',
@@ -338,44 +296,58 @@ async function confirmEdit() {
   })
   scrollToMsg()
 
-  const task = createEditSseConnection(
-    editTargetMsgId.value,
-    chatStore.currentSessionId,
-    newText,
-    (chunk) => {
-      chatStore.updateStreamingMessage(aiMsgId, chunk)
-      scrollToMsg()
-    },
-    async () => {
-      chatStore.finishStreaming(aiMsgId)
-      chatStore.setActiveRequestTask(null)
-      loadSessions(true)
-      // 重新拉取最新一页消息，用后端真实 ID 替换前端临时 ID
-      if (chatStore.currentSessionId) {
-        await refreshLatestMessages(chatStore.currentSessionId)
-      }
-      scrollToMsg()
-    },
-    (err) => {
-      console.error('Edit SSE error:', err)
-      chatStore.finishStreaming(aiMsgId)
-      chatStore.setActiveRequestTask(null)
-      uni.showToast({ title: '重新发送失败，请重试', icon: 'none' })
+  const onChunk = (chunk: string) => {
+    chatStore.updateStreamingMessage(aiMsgId, chunk)
+    scrollToMsg()
+  }
+
+  const onDone = async () => {
+    chatStore.finishStreaming(aiMsgId)
+    chatStore.setActiveRequestTask(null)
+    await loadSessions(true)
+    if (!chatStore.currentSessionId && chatStore.sessions.length > 0) {
+      chatStore.setCurrentSession(chatStore.sessions[0].id)
     }
-  )
+    if (chatStore.currentSessionId) {
+      await refreshLatestMessages(chatStore.currentSessionId)
+    }
+    scrollToMsg()
+  }
+
+  const onError = (err: any) => {
+    console.error('Edit SSE error:', err)
+    chatStore.finishStreaming(aiMsgId)
+    chatStore.setActiveRequestTask(null)
+    const msg = (err instanceof Error && err.message) ? err.message : '重新发送失败，请重试'
+    uni.showToast({ title: msg, icon: 'none', duration: 3000 })
+  }
+
+  let task: UniApp.RequestTask
+  if (isTemporaryMsg || !chatStore.currentSessionId) {
+    task = createSseConnection(
+      chatStore.currentSessionId,
+      newText,
+      onChunk,
+      onDone,
+      onError
+    )
+  } else {
+    task = createEditSseConnection(
+      targetMsgId,
+      chatStore.currentSessionId,
+      newText,
+      onChunk,
+      onDone,
+      onError
+    )
+  }
   chatStore.startStreaming(aiMsgId, task)
 }
 
-/**
- * SSE 完成后静默刷新最新一页消息
- * 用后端返回的真实 ID 替换前端发送时生成的临时 ID（如 user_xxx / ai_xxx）
- * 这样后续的编辑操作可以拿到有效的 messageId 传给后端
- */
 async function refreshLatestMessages(sessionId: string) {
   try {
     const result = await getMessageList(sessionId, 1, 20)
     if (result.records && result.records.length > 0) {
-      // 只替换列表尾部（最新 N 条），避免覆盖用户已向上加载的历史消息
       const newMsgs = [...result.records].reverse().map(msg => ({
         id: String(msg.id),
         role: msg.role as 'user' | 'assistant',
@@ -384,20 +356,15 @@ async function refreshLatestMessages(sessionId: string) {
         riskLevel: msg.riskLevel,
         createdAt: parseDate(msg.createdTime).getTime()
       }))
-      // 通过 store 方法更新消息列表，避免直接操作 reactive 数组
       chatStore.replaceTrailingMessages(newMsgs, 1, result.pages ?? 1)
     }
   } catch (e) {
-    // 刷新失败不影响主流程，静默忽略
     console.warn('refreshLatestMessages failed:', e)
   }
 }
 
-// ── 工具函数 ─────────────────────────────────────────────
-
 function scrollToMsg() {
   nextTick(() => {
-    // 通过交替切换两个锚点 id，保证即使上次值相同也能触发 scroll-into-view
     scrollToggle = !scrollToggle
     scrollToBottom.value = scrollToggle ? 'msg-bottom' : 'msg-bottom-alt'
   })
@@ -427,20 +394,25 @@ async function selectPersonality(code: string) {
     <!-- 顶部栏 -->
     <view class="chat-header">
       <view class="header-left" @click="showSessionPanel = !showSessionPanel">
-        <text class="header-icon">☰</text>
+        <view class="icon-btn">
+          <text class="icon-text">☰</text>
+        </view>
       </view>
       <view class="header-center" @click="showPersonalityPicker = true">
-        <text class="personality-emoji">{{ personality.emoji }}</text>
-        <!-- 修复：后端字段是 name，不是 label -->
+        <view class="avatar-sm">
+          <text class="avatar-sm-emoji">{{ personality.emoji }}</text>
+        </view>
         <text class="personality-name">{{ personality.name }}</text>
-        <text class="header-chevron">›</text>
+        <text class="chevron">›</text>
       </view>
       <view class="header-right" @click="startNewChat">
-        <text class="header-icon">✏️</text>
+        <view class="icon-btn">
+          <text class="icon-text">✏</text>
+        </view>
       </view>
     </view>
 
-    <!-- 消息列表（支持向上滚动懒加载历史消息） -->
+    <!-- 消息列表 -->
     <scroll-view
       class="messages-container"
       scroll-y
@@ -449,30 +421,34 @@ async function selectPersonality(code: string) {
       @scrolltoupper="onMsgScrollToUpper"
       upper-threshold="60"
     >
-      <!-- 加载更早消息提示 -->
       <view v-if="isLoadingMoreMsg" class="load-more-tip">
-        <text>加载中...</text>
+        <text>加载中…</text>
       </view>
       <view v-else-if="chatStore.msgTotalPages !== -1 && !chatStore.hasMoreMessages()" class="load-more-tip">
-        <text>已加载全部消息</text>
+        <text>— 已加载全部消息 —</text>
       </view>
 
-      <!-- 欢迎消息 -->
+      <!-- 欢迎区域 -->
       <view v-if="messages.length === 0" class="welcome-area">
-        <text class="welcome-emoji">{{ personality.emoji }}</text>
-        <text class="welcome-text">嗨，我是你的{{ personality.name }}</text>
-        <text class="welcome-desc">有什么想聊的吗？今天感觉怎么样？🌙</text>
+        <view class="welcome-avatar">
+          <text class="welcome-emoji">{{ personality.emoji }}</text>
+          <view class="avatar-glow" />
+        </view>
+        <text class="welcome-name">{{ personality.name }}</text>
+        <text class="welcome-desc">今天感觉怎么样？随时可以和我聊聊 🌙</text>
         <view class="quick-replies">
-          <text
+          <view
             v-for="reply in ['我今天心情不好', '我有点焦虑', '能陪我聊聊吗？']"
             :key="reply"
             class="quick-reply-btn"
             @click="inputText = reply"
-          >{{ reply }}</text>
+          >
+            <text class="quick-reply-text">{{ reply }}</text>
+          </view>
         </view>
       </view>
 
-      <!-- 消息气泡（id 用于向上加载后恢复滚动位置） -->
+      <!-- 消息气泡 -->
       <view
         v-for="msg in messages"
         :key="msg.id"
@@ -480,87 +456,122 @@ async function selectPersonality(code: string) {
         class="message-wrapper"
         :class="{ 'message-user': msg.role === 'user', 'message-ai': msg.role === 'assistant' }"
       >
-        <view v-if="msg.role === 'assistant'" class="avatar ai-avatar">
-          {{ personality.emoji }}
+        <!-- AI 头像 -->
+        <view v-if="msg.role === 'assistant'" class="ai-avatar-wrap">
+          <view class="ai-avatar">
+            <text class="ai-avatar-emoji">{{ personality.emoji }}</text>
+          </view>
         </view>
 
+        <!-- 用户消息 -->
+        <view v-if="msg.role === 'user'" class="user-msg-col">
+          <view v-if="editingMsgId === msg.id" class="inline-edit-wrapper">
+            <textarea
+              v-model="editText"
+              class="inline-edit-textarea"
+              :auto-height="true"
+              :max-height="160"
+              :show-confirm-bar="false"
+              :focus="true"
+              placeholder="修改你的消息..."
+              :placeholder-style="'color: rgba(255,255,255,0.25); font-size: 28rpx'"
+            />
+            <view class="inline-edit-actions">
+              <view class="inline-cancel-btn" @click="cancelInlineEdit">
+                <text class="inline-btn-text">取消</text>
+              </view>
+              <view class="inline-confirm-btn" @click="confirmInlineEdit">
+                <text class="inline-btn-text inline-confirm-text">重新发送</text>
+              </view>
+            </view>
+          </view>
+          <view v-else>
+            <view
+              class="bubble-user"
+              :class="{ 'bubble-selected': selectedMsgId === msg.id }"
+              @tap="onTapUserMsg(msg.id)"
+            >
+              <text class="msg-text-user">{{ msg.content }}</text>
+            </view>
+            <view v-if="selectedMsgId === msg.id" class="msg-toolbar">
+              <view class="toolbar-btn" @click="startInlineEdit(msg.id, msg.content)">
+                <text class="toolbar-icon">✏</text>
+                <text class="toolbar-label">编辑</text>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <!-- AI 消息 -->
         <view
-          class="message-bubble"
-          :class="{
-            'bubble-user': msg.role === 'user',
-            'bubble-ai': msg.role === 'assistant',
-            'bubble-streaming': msg.isStreaming
-          }"
-          @longpress="msg.role === 'user' && !isStreaming ? onLongPressUserMsg(msg.id, msg.content) : undefined"
-          @tap="msg.role === 'user' && !isStreaming ? onTapUserMsg(msg.id, msg.content) : undefined"
+          v-else
+          class="bubble-ai"
+          :class="{ 'bubble-streaming': msg.isStreaming }"
         >
-          <text class="message-text" :user-select="true">{{ msg.content }}</text>
-          <text v-if="msg.isStreaming" class="typing-cursor">▋</text>
-          <!-- 用户消息编辑提示图标（非流式时显示） -->
-          <text v-if="msg.role === 'user' && !isStreaming" class="edit-hint">✏</text>
+          <text class="msg-text-ai">{{ msg.content }}</text>
+          <text v-if="msg.isStreaming && !msg.content" class="typing-dots">
+            <text class="dot">●</text><text class="dot">●</text><text class="dot">●</text>
+          </text>
+          <text v-if="msg.isStreaming && msg.content" class="cursor">▋</text>
         </view>
       </view>
 
-      <!-- 底部锚点（双锚点交替，解决 scroll-into-view 值不变时不触发的问题） -->
-      <view id="msg-bottom" class="msg-bottom-anchor" />
-      <view id="msg-bottom-alt" class="msg-bottom-anchor" />
+      <view id="msg-bottom" class="anchor" />
+      <view id="msg-bottom-alt" class="anchor" />
     </scroll-view>
 
     <!-- 输入区域 -->
     <view class="input-area">
-      <view class="input-wrapper">
+      <view class="input-box">
         <textarea
           v-model="inputText"
           class="message-input"
-          placeholder="说说你的心情..."
-          :placeholder-style="'color: #5a5070; font-size: 28rpx'"
+          placeholder="说说你的心情…"
+          :placeholder-style="'color: rgba(180,170,200,0.35); font-size: 28rpx'"
           :auto-height="true"
           :max-height="120"
           :show-confirm-bar="false"
           :disabled="isStreaming"
           @confirm="sendMessage"
         />
-      </view>
-      <!-- 流式输出中：显示停止按钮；空闲时：显示发送按钮 -->
-      <view
-        v-if="isStreaming"
-        class="send-btn stop-btn"
-        @click="handleStopStreaming"
-      >
-        <text class="stop-icon">■</text>
-      </view>
-      <view
-        v-else
-        class="send-btn"
-        :class="{ 'send-btn-active': inputText.trim() }"
-        @click="sendMessage"
-      >
-        <text>↑</text>
+        <view v-if="isStreaming" class="stop-btn" @click="handleStopStreaming">
+          <view class="stop-icon" />
+        </view>
+        <view
+          v-else
+          class="send-btn"
+          :class="{ 'send-active': inputText.trim() }"
+          @click="sendMessage"
+        >
+          <text class="send-icon">↑</text>
+        </view>
       </view>
     </view>
 
-    <!-- 会话列表侧边面板（支持向下滚动懒加载更多会话） -->
+    <!-- 会话列表面板 -->
     <view v-if="showSessionPanel" class="session-overlay" @click="showSessionPanel = false">
       <view class="session-panel" @click.stop>
         <view class="session-panel-header">
           <text class="session-panel-title">历史对话</text>
-          <text class="session-panel-close" @click="showSessionPanel = false">✕</text>
+          <view class="close-btn" @click="showSessionPanel = false">
+            <text class="close-icon">✕</text>
+          </view>
         </view>
 
-        <view class="new-session-btn" @click="startNewChat">
-          <text class="new-session-icon">✏️</text>
+        <view class="new-session-item" @click="startNewChat">
+          <view class="new-session-icon-wrap">
+            <text class="new-session-icon">✏</text>
+          </view>
           <text class="new-session-text">开始新对话</text>
         </view>
 
-        <view v-if="isLoadingSessions" class="session-loading">
-          <text>加载中...</text>
+        <view v-if="isLoadingSessions" class="session-empty-tip">
+          <text>加载中…</text>
         </view>
-
-        <view v-else-if="sessions.length === 0" class="session-empty">
+        <view v-else-if="sessions.length === 0" class="session-empty-tip">
           <text>暂无历史对话</text>
         </view>
 
-        <!-- 会话列表（滚动到底懒加载更多） -->
         <scroll-view
           v-else
           class="session-list"
@@ -575,64 +586,37 @@ async function selectPersonality(code: string) {
             :class="{ 'session-active': chatStore.currentSessionId === session.id }"
             @click="switchSession(session.id)"
           >
-            <view class="session-item-content">
+            <view class="session-item-info">
               <text class="session-title">{{ session.title || '新对话' }}</text>
               <text class="session-time">{{ session.updatedTime ? session.updatedTime.slice(5, 16) : '' }}</text>
             </view>
-            <text class="session-delete" @click.stop="removeSession(session.id)">🗑</text>
+            <view class="session-delete-btn" @click.stop="removeSession(session.id)">
+              <text class="session-delete-icon">🗑</text>
+            </view>
           </view>
-
-          <!-- 加载更多会话状态 -->
-          <view v-if="isLoadingMoreSession" class="session-loading">
-            <text>加载更多...</text>
+          <view v-if="isLoadingMoreSession" class="session-empty-tip">
+            <text>加载更多…</text>
           </view>
-          <view v-else-if="!chatStore.hasMoreSessions()" class="session-loading">
+          <view v-else-if="!chatStore.hasMoreSessions()" class="session-empty-tip">
             <text>没有更多了</text>
           </view>
         </scroll-view>
       </view>
     </view>
 
-    <!-- 编辑消息弹窗 -->
-    <view v-if="showEditPopup" class="modal-overlay" @click="showEditPopup = false">
-      <view class="edit-popup" @click.stop>
-        <view class="edit-popup-header">
-          <text class="edit-popup-title">编辑消息</text>
-          <text class="edit-popup-close" @click="showEditPopup = false">✕</text>
-        </view>
-        <textarea
-          v-model="editText"
-          class="edit-textarea"
-          :auto-height="true"
-          :max-height="200"
-          :show-confirm-bar="false"
-          placeholder="修改你的消息..."
-          :placeholder-style="'color: #5a5070; font-size: 28rpx'"
-        />
-        <view class="edit-popup-actions">
-          <view class="edit-cancel-btn" @click="showEditPopup = false">
-            <text>取消</text>
-          </view>
-          <view class="edit-confirm-btn" @click="confirmEdit">
-            <text>重新发送</text>
-          </view>
-        </view>
-      </view>
-    </view>
-
-    <!-- 人格选择器弹窗 -->
+    <!-- 人格选择器 -->
     <view v-if="showPersonalityPicker" class="modal-overlay" @click="showPersonalityPicker = false">
       <view class="personality-picker" @click.stop>
+        <view class="picker-handle" />
         <view class="picker-header">
-          <text class="picker-title">选择你的 AI 伴侣</text>
-          <text class="picker-close" @click="showPersonalityPicker = false">✕</text>
+          <text class="picker-title">选择 AI 伴侣</text>
+          <view class="close-btn" @click="showPersonalityPicker = false">
+            <text class="close-icon">✕</text>
+          </view>
         </view>
 
-        <view v-if="femalePersonalities.length > 0" class="gender-group">
-          <view class="gender-label">
-            <text class="gender-icon">♀</text>
-            <text class="gender-text">女性角色</text>
-          </view>
+        <view v-if="femalePersonalities.length > 0" class="gender-section">
+          <text class="gender-label">女性角色</text>
           <view class="personality-grid">
             <view
               v-for="p in femalePersonalities"
@@ -648,11 +632,8 @@ async function selectPersonality(code: string) {
           </view>
         </view>
 
-        <view v-if="malePersonalities.length > 0" class="gender-group">
-          <view class="gender-label">
-            <text class="gender-icon">♂</text>
-            <text class="gender-text">男性角色</text>
-          </view>
+        <view v-if="malePersonalities.length > 0" class="gender-section">
+          <text class="gender-label">男性角色</text>
           <view class="personality-grid">
             <view
               v-for="p in malePersonalities"
@@ -669,7 +650,7 @@ async function selectPersonality(code: string) {
         </view>
 
         <view v-if="personalityStore.loading" class="picker-loading">
-          <text>加载中...</text>
+          <text>加载中…</text>
         </view>
       </view>
     </view>
@@ -677,176 +658,227 @@ async function selectPersonality(code: string) {
 </template>
 
 <style>
+/* ── 全局 ── */
 .chat-page {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #0f0f1a;
+  background: #0d0b1a;
 }
 
+/* ── 顶部栏 ── */
 .chat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 100rpx 32rpx 24rpx;
-  background: rgba(15, 15, 26, 0.95);
+  padding: 96rpx 24rpx 16rpx;
+  background: rgba(15, 12, 28, 0.95);
   backdrop-filter: blur(20rpx);
-  border-bottom: 1rpx solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
 }
 
-.header-icon {
-  font-size: 40rpx;
-  color: #7a6b9a;
-  padding: 16rpx;
+.icon-btn {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-text {
+  font-size: 32rpx;
+  color: rgba(200, 190, 230, 0.8);
 }
 
 .header-center {
   display: flex;
   align-items: center;
   gap: 12rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  border-radius: 40rpx;
+  padding: 10rpx 24rpx 10rpx 14rpx;
 }
 
-.personality-emoji {
-  font-size: 36rpx;
+.avatar-sm {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: rgba(120, 80, 200, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.avatar-sm-emoji { font-size: 26rpx; }
 
 .personality-name {
-  font-size: 32rpx;
-  color: #e8d5ff;
-  font-weight: 600;
+  font-size: 28rpx;
+  color: rgba(220, 210, 240, 0.9);
+  font-weight: 500;
 }
 
-.header-chevron {
-  color: #7a6b9a;
-  font-size: 32rpx;
+.chevron {
+  font-size: 30rpx;
+  color: rgba(180, 160, 220, 0.5);
 }
 
+/* ── 消息区域 ── */
 .messages-container {
   flex: 1;
-  padding: 24rpx 24rpx 0;
   overflow: hidden;
+  padding: 20rpx 24rpx 8rpx;
 }
 
-/* 加载更多历史消息提示 */
 .load-more-tip {
   text-align: center;
-  padding: 20rpx 0;
-  color: #5a5070;
-  font-size: 24rpx;
+  padding: 16rpx 0;
+  color: rgba(180, 170, 210, 0.35);
+  font-size: 22rpx;
 }
 
+/* 欢迎区 */
 .welcome-area {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 80rpx 40rpx;
+  padding: 80rpx 32rpx 40rpx;
   gap: 20rpx;
 }
 
-.welcome-emoji {
-  font-size: 80rpx;
-  animation: pulse 2s infinite;
+.welcome-avatar {
+  position: relative;
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  background: rgba(120, 80, 200, 0.2);
+  border: 1.5rpx solid rgba(150, 100, 250, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8rpx;
 }
 
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
+.welcome-emoji { font-size: 50rpx; }
+
+.avatar-glow {
+  position: absolute;
+  inset: -8rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(120, 80, 220, 0.15), transparent);
 }
 
-.welcome-text {
+.welcome-name {
   font-size: 36rpx;
-  color: #e8d5ff;
+  color: rgba(240, 235, 255, 0.95);
   font-weight: 600;
 }
 
 .welcome-desc {
-  font-size: 28rpx;
-  color: #7a6b9a;
+  font-size: 26rpx;
+  color: rgba(180, 170, 210, 0.6);
   text-align: center;
+  line-height: 1.6;
 }
 
 .quick-replies {
   display: flex;
   flex-wrap: wrap;
-  gap: 16rpx;
+  gap: 14rpx;
   justify-content: center;
-  margin-top: 20rpx;
+  margin-top: 16rpx;
 }
 
 .quick-reply-btn {
-  background: rgba(184, 158, 232, 0.12);
-  border: 1rpx solid rgba(184, 158, 232, 0.25);
-  color: #b89ee8;
-  font-size: 26rpx;
-  padding: 16rpx 28rpx;
-  border-radius: 40rpx;
+  background: rgba(120, 80, 200, 0.12);
+  border: 1rpx solid rgba(150, 100, 250, 0.25);
+  border-radius: 30rpx;
+  padding: 14rpx 26rpx;
 }
 
+.quick-reply-text {
+  font-size: 25rpx;
+  color: rgba(180, 150, 240, 0.85);
+}
+
+/* 消息 wrapper */
 .message-wrapper {
   display: flex;
   margin-bottom: 24rpx;
   align-items: flex-end;
-  gap: 16rpx;
+  gap: 14rpx;
 }
 
-.message-user {
-  flex-direction: row-reverse;
-}
+.message-user { flex-direction: row-reverse; }
+.message-ai { flex-direction: row; }
 
-.message-ai {
-  flex-direction: row;
-}
+/* AI 头像 */
+.ai-avatar-wrap { flex-shrink: 0; }
 
-.avatar {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 36rpx;
+.ai-avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: rgba(120, 80, 200, 0.25);
+  border: 1.5rpx solid rgba(150, 100, 250, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 36rpx;
-  flex-shrink: 0;
 }
 
-.ai-avatar {
-  background: rgba(184, 158, 232, 0.15);
-}
+.ai-avatar-emoji { font-size: 32rpx; }
 
-.message-bubble {
-  max-width: 70%;
-  padding: 24rpx 28rpx;
-  border-radius: 24rpx;
-  word-break: break-word;
+/* 气泡 - 用户 */
+.user-msg-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 72%;
 }
 
 .bubble-user {
-  background: linear-gradient(135deg, #b89ee8 0%, #8b6fd1 100%);
-  border-bottom-right-radius: 8rpx;
+  background: linear-gradient(135deg, #7c4dff 0%, #5c35cc 100%);
+  border-radius: 20rpx 20rpx 4rpx 20rpx;
+  padding: 20rpx 24rpx;
+  max-width: 100%;
+  box-shadow: 0 4rpx 20rpx rgba(100, 60, 220, 0.3);
 }
 
-.bubble-ai {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1rpx solid rgba(255, 255, 255, 0.08);
-  border-bottom-left-radius: 8rpx;
+.bubble-selected {
+  box-shadow: 0 0 0 2rpx rgba(180, 140, 255, 0.6), 0 4rpx 20rpx rgba(100, 60, 220, 0.3);
 }
 
-.bubble-streaming {
-  border-bottom-left-radius: 8rpx;
-}
-
-.message-text {
-  font-size: 30rpx;
-  line-height: 1.6;
-  color: #e8e0f0;
-}
-
-.bubble-user .message-text {
-  color: white;
-}
-
-.typing-cursor {
-  color: #b89ee8;
+.msg-text-user {
   font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1.65;
+  word-break: break-word;
+}
+
+/* 气泡 - AI */
+.bubble-ai {
+  max-width: 72%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  border-radius: 20rpx 20rpx 20rpx 4rpx;
+  padding: 20rpx 24rpx;
+  backdrop-filter: blur(10rpx);
+}
+
+.msg-text-ai {
+  font-size: 28rpx;
+  color: rgba(225, 218, 245, 0.92);
+  line-height: 1.75;
+  word-break: break-word;
+}
+
+.cursor {
+  color: rgba(150, 100, 250, 0.8);
+  font-size: 26rpx;
   animation: blink 1s infinite;
 }
 
@@ -855,387 +887,348 @@ async function selectPersonality(code: string) {
   50% { opacity: 0; }
 }
 
-.msg-bottom-anchor {
-  height: 20rpx;
+.typing-dots { display: flex; gap: 6rpx; align-items: center; }
+.dot {
+  font-size: 12rpx;
+  color: rgba(150, 100, 250, 0.6);
+  animation: bounce-dot 1.2s ease-in-out infinite;
+}
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce-dot {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-5rpx); opacity: 1; }
 }
 
-.input-area {
+/* 工具栏 */
+.msg-toolbar {
   display: flex;
-  align-items: flex-end;
-  gap: 16rpx;
-  padding: 20rpx 24rpx 48rpx;
-  background: rgba(15, 15, 26, 0.97);
-  border-top: 1rpx solid rgba(255, 255, 255, 0.06);
+  gap: 8rpx;
+  margin-top: 8rpx;
+  justify-content: flex-end;
 }
 
-.input-wrapper {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 24rpx;
-  border: 1rpx solid rgba(184, 158, 232, 0.2);
-  padding: 20rpx 28rpx;
-  min-height: 80rpx;
+.toolbar-btn {
   display: flex;
   align-items: center;
+  gap: 6rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  border-radius: 20rpx;
+  padding: 8rpx 18rpx;
+}
+
+.toolbar-icon { font-size: 22rpx; color: rgba(180, 150, 240, 0.8); }
+.toolbar-label { font-size: 22rpx; color: rgba(180, 150, 240, 0.8); }
+
+/* inline 编辑 */
+.inline-edit-wrapper {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1.5rpx solid rgba(150, 100, 250, 0.3);
+  border-radius: 20rpx;
+  padding: 20rpx;
+}
+
+.inline-edit-textarea {
+  width: 100%;
+  font-size: 28rpx;
+  color: rgba(225, 218, 245, 0.92);
+  line-height: 1.5;
+  background: transparent;
+  min-height: 60rpx;
+  margin-bottom: 14rpx;
+}
+
+.inline-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12rpx;
+}
+
+.inline-cancel-btn, .inline-confirm-btn {
+  padding: 10rpx 24rpx;
+  border-radius: 20rpx;
+}
+
+.inline-cancel-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+}
+
+.inline-confirm-btn {
+  background: linear-gradient(135deg, #7c4dff, #5c35cc);
+}
+
+.inline-btn-text { font-size: 24rpx; color: rgba(200, 190, 230, 0.8); }
+.inline-confirm-text { color: white; font-weight: 600; }
+
+.anchor { height: 16rpx; }
+
+/* ── 输入区域 ── */
+.input-area {
+  padding: 14rpx 20rpx 44rpx;
+  background: rgba(15, 12, 28, 0.95);
+  border-top: 1rpx solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20rpx);
+  flex-shrink: 0;
+}
+
+.input-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 12rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  border-radius: 22rpx;
+  padding: 14rpx 14rpx 14rpx 20rpx;
+  min-height: 80rpx;
 }
 
 .message-input {
   flex: 1;
-  font-size: 30rpx;
-  color: #e8d5ff;
+  font-size: 28rpx;
+  color: rgba(225, 218, 245, 0.92);
   line-height: 1.5;
   background: transparent;
   width: 100%;
+  min-height: 44rpx;
 }
 
-.send-btn {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 40rpx;
-  background: rgba(139, 111, 209, 0.3);
+.send-btn, .stop-btn {
+  width: 66rpx;
+  height: 66rpx;
+  border-radius: 16rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
   transition: all 0.2s;
 }
 
-.send-btn-active {
-  background: linear-gradient(135deg, #b89ee8 0%, #8b6fd1 100%);
-  box-shadow: 0 4rpx 20rpx rgba(139, 111, 209, 0.4);
+.send-active {
+  background: linear-gradient(135deg, #7c4dff, #5c35cc);
+  border-color: rgba(150, 100, 250, 0.5);
+  box-shadow: 0 4rpx 16rpx rgba(100, 60, 220, 0.4);
 }
 
-.send-btn text {
-  color: white;
-  font-size: 36rpx;
+.send-icon {
+  font-size: 32rpx;
+  color: rgba(200, 190, 230, 0.5);
   font-weight: bold;
 }
 
-/* 停止按钮 */
-.stop-btn {
-  background: rgba(220, 80, 80, 0.85);
-  box-shadow: 0 4rpx 16rpx rgba(220, 80, 80, 0.4);
-}
+.send-active .send-icon { color: white; }
 
 .stop-icon {
-  color: white;
-  font-size: 28rpx !important;
+  width: 22rpx;
+  height: 22rpx;
+  background: #e06060;
+  border-radius: 4rpx;
 }
 
-/* 用户消息编辑提示图标 */
-.edit-hint {
-  display: inline-block;
-  margin-left: 8rpx;
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.5);
-  vertical-align: middle;
-  pointer-events: none;
-}
-
-/* 消息气泡 relative 定位（弹出层等后续需要时备用） */
-.message-bubble {
-  position: relative;
-}
-
-/* 会话侧边面板 */
+/* ── 会话面板 ── */
 .session-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8rpx);
   z-index: 200;
   display: flex;
-  flex-direction: row;
 }
 
 .session-panel {
-  width: 75%;
+  width: 76%;
   max-width: 560rpx;
   height: 100%;
-  background: #13132a;
+  background: #120f22;
+  border-right: 1rpx solid rgba(255, 255, 255, 0.07);
   display: flex;
   flex-direction: column;
-  padding: 0;
-  /* 必须设置 overflow:hidden，子 scroll-view 才能正确继承 flex 剩余高度 */
   overflow: hidden;
 }
 
 .session-panel-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 100rpx 32rpx 24rpx;
+  justify-content: space-between;
+  padding: 96rpx 28rpx 20rpx;
   border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
 }
 
 .session-panel-title {
-  font-size: 36rpx;
-  color: #e8d5ff;
-  font-weight: 600;
+  font-size: 34rpx;
+  color: rgba(230, 225, 255, 0.92);
+  font-weight: 700;
 }
 
-.session-panel-close {
-  font-size: 36rpx;
-  color: #7a6b9a;
-  padding: 8rpx;
+.close-btn {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.new-session-btn {
+.close-icon { font-size: 24rpx; color: rgba(180, 170, 210, 0.6); }
+
+.new-session-item {
   display: flex;
   align-items: center;
   gap: 16rpx;
-  padding: 28rpx 32rpx;
-  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
-  background: rgba(184, 158, 232, 0.08);
+  padding: 24rpx 28rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.05);
 }
 
-.new-session-icon { font-size: 32rpx; }
-.new-session-text { font-size: 28rpx; color: #b89ee8; font-weight: 500; }
+.new-session-icon-wrap {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 12rpx;
+  background: rgba(120, 80, 200, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
-.session-loading, .session-empty {
-  padding: 60rpx 32rpx;
+.new-session-icon { font-size: 22rpx; color: rgba(160, 120, 240, 0.8); }
+.new-session-text { font-size: 27rpx; color: rgba(180, 150, 240, 0.85); font-weight: 500; }
+
+.session-empty-tip {
+  padding: 40rpx 28rpx;
   text-align: center;
-  color: #5a5070;
-  font-size: 26rpx;
+  color: rgba(180, 170, 210, 0.35);
+  font-size: 24rpx;
 }
 
-.session-list {
-  flex: 1;
-  /* 微信小程序中 scroll-view 必须设定明确高度才能滚动；
-     配合父容器 flex: column + overflow:hidden 使用 height:0 + flex:1 */
-  height: 0;
-  min-height: 0;
-  overflow: hidden;
-}
+.session-list { flex: 1; height: 0; min-height: 0; overflow: hidden; }
 
 .session-item {
   display: flex;
   align-items: center;
-  padding: 24rpx 32rpx;
+  padding: 20rpx 28rpx;
   border-bottom: 1rpx solid rgba(255, 255, 255, 0.04);
 }
 
 .session-active {
-  background: rgba(184, 158, 232, 0.1);
+  background: rgba(120, 80, 200, 0.1);
 }
 
-.session-item-content {
+.session-item-info {
   flex: 1;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
-  overflow: hidden;
+  gap: 6rpx;
 }
 
 .session-title {
-  font-size: 28rpx;
-  color: #c4a8f0;
+  font-size: 27rpx;
+  color: rgba(220, 215, 245, 0.85);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.session-time {
-  font-size: 22rpx;
-  color: #5a5070;
+.session-time { font-size: 21rpx; color: rgba(160, 150, 190, 0.5); }
+
+.session-delete-btn {
+  padding: 8rpx 8rpx 8rpx 20rpx;
 }
 
-.session-delete {
-  font-size: 32rpx;
-  padding: 8rpx 8rpx 8rpx 24rpx;
-  color: #5a5070;
-}
+.session-delete-icon { font-size: 28rpx; color: rgba(200, 180, 220, 0.3); }
 
-/* 人格选择器 */
+/* ── 人格选择器 ── */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(10rpx);
   display: flex;
   align-items: flex-end;
   z-index: 100;
 }
 
 .personality-picker {
-  background: #1a1a2e;
-  border-top-left-radius: 40rpx;
-  border-top-right-radius: 40rpx;
-  padding: 40rpx 32rpx 80rpx;
+  background: #130e24;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.08);
+  border-top-left-radius: 36rpx;
+  border-top-right-radius: 36rpx;
+  padding: 16rpx 28rpx 80rpx;
   width: 100%;
-  max-height: 80vh;
+  max-height: 82vh;
   overflow-y: auto;
-  border: 1rpx solid rgba(184, 158, 232, 0.15);
+  box-shadow: 0 -8rpx 40rpx rgba(0, 0, 0, 0.4);
+}
+
+.picker-handle {
+  width: 60rpx;
+  height: 6rpx;
+  border-radius: 3rpx;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 auto 28rpx;
 }
 
 .picker-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 40rpx;
+  margin-bottom: 28rpx;
 }
 
 .picker-title {
   font-size: 34rpx;
-  color: #e8d5ff;
-  font-weight: 600;
+  color: rgba(230, 225, 255, 0.95);
+  font-weight: 700;
 }
 
-.picker-close {
-  font-size: 32rpx;
-  color: #7a6b9a;
-  padding: 8rpx;
-}
-
-.gender-group {
-  margin-bottom: 32rpx;
-}
+.gender-section { margin-bottom: 28rpx; }
 
 .gender-label {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-bottom: 20rpx;
-}
-
-.gender-icon {
-  font-size: 28rpx;
-  color: #b89ee8;
-}
-
-.gender-text {
-  font-size: 26rpx;
-  color: #7a6b9a;
-  font-weight: 500;
+  font-size: 22rpx;
+  color: rgba(180, 160, 220, 0.45);
+  display: block;
+  margin-bottom: 16rpx;
   letter-spacing: 2rpx;
 }
 
 .picker-loading {
   text-align: center;
-  color: #5a5070;
-  font-size: 28rpx;
-  padding: 60rpx 0;
+  color: rgba(180, 170, 210, 0.4);
+  font-size: 26rpx;
+  padding: 40rpx 0;
 }
 
 .personality-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24rpx;
+  gap: 16rpx;
 }
 
 .personality-card {
   background: rgba(255, 255, 255, 0.04);
-  border: 1rpx solid rgba(184, 158, 232, 0.12);
-  border-radius: 24rpx;
-  padding: 32rpx 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  border-radius: 20rpx;
+  padding: 24rpx 16rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12rpx;
-  transition: all 0.2s;
+  gap: 10rpx;
 }
 
 .personality-active {
-  background: rgba(184, 158, 232, 0.15);
-  border-color: rgba(184, 158, 232, 0.5);
+  background: rgba(120, 80, 200, 0.15);
+  border-color: rgba(150, 100, 250, 0.4);
+  box-shadow: 0 4rpx 20rpx rgba(100, 60, 220, 0.2);
 }
 
-.p-emoji {
-  font-size: 56rpx;
-}
-
-.p-name {
-  font-size: 28rpx;
-  color: #e8d5ff;
-  font-weight: 600;
-}
-
-.p-desc {
-  font-size: 24rpx;
-  color: #7a6b9a;
-}
-
-/* 编辑消息弹窗 */
-.edit-popup {
-  background: #1a1a2e;
-  border-top-left-radius: 40rpx;
-  border-top-right-radius: 40rpx;
-  padding: 40rpx 32rpx 80rpx;
-  width: 100%;
-  border: 1rpx solid rgba(184, 158, 232, 0.15);
-}
-
-.edit-popup-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 32rpx;
-}
-
-.edit-popup-title {
-  font-size: 34rpx;
-  color: #e8d5ff;
-  font-weight: 600;
-}
-
-.edit-popup-close {
-  font-size: 32rpx;
-  color: #7a6b9a;
-  padding: 8rpx;
-}
-
-.edit-textarea {
-  width: 100%;
-  font-size: 30rpx;
-  color: #e8d5ff;
-  line-height: 1.5;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1rpx solid rgba(184, 158, 232, 0.2);
-  border-radius: 20rpx;
-  padding: 24rpx 28rpx;
-  min-height: 120rpx;
-  margin-bottom: 32rpx;
-}
-
-.edit-popup-actions {
-  display: flex;
-  gap: 24rpx;
-}
-
-.edit-cancel-btn {
-  flex: 1;
-  height: 88rpx;
-  border-radius: 44rpx;
-  background: rgba(255, 255, 255, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.edit-cancel-btn text {
-  color: #7a6b9a;
-  font-size: 30rpx;
-}
-
-.edit-confirm-btn {
-  flex: 2;
-  height: 88rpx;
-  border-radius: 44rpx;
-  background: linear-gradient(135deg, #b89ee8 0%, #8b6fd1 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4rpx 20rpx rgba(139, 111, 209, 0.4);
-}
-
-.edit-confirm-btn text {
-  color: white;
-  font-size: 30rpx;
-  font-weight: 600;
-}
+.p-emoji { font-size: 46rpx; }
+.p-name { font-size: 27rpx; color: rgba(225, 218, 245, 0.92); font-weight: 600; }
+.p-desc { font-size: 21rpx; color: rgba(180, 170, 210, 0.5); text-align: center; line-height: 1.4; }
 </style>
 

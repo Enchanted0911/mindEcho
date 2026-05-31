@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.UUID;
+
 /**
  * 编辑消息请求
  * 编辑后将删除该消息之后的所有消息，并以新内容重新发送
@@ -13,16 +15,16 @@ import lombok.Data;
 public class EditMessageRequest {
 
     /**
-     * 要编辑的消息ID（UUID 字符串）
+     * 要编辑的消息ID
      */
     @NotNull(message = "消息ID不能为空")
-    private String messageId;
+    private UUID messageId;
 
     /**
-     * 会话ID（UUID 字符串）
+     * 会话ID
      */
     @NotNull(message = "会话ID不能为空")
-    private String sessionId;
+    private UUID sessionId;
 
     /**
      * 编辑后的消息内容

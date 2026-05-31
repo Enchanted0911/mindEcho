@@ -1,284 +1,417 @@
 
-.astro-home {
-  min-height: 100vh;
-  background: #0a0a18;
+/* ═══════════════════════════════════════════
+   太阳系星盘页 · 深色宇宙风格
+═══════════════════════════════════════════ */
+.solar-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a1a;
   position: relative;
   overflow: hidden;
 }
 
-/* 星空背景 */
-.stars-bg {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
+/* ── 星空背景 ─────────────────────────────── */
+.star-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
   pointer-events: none;
   z-index: 0;
 }
-.star {
+.star-dot {
   position: absolute;
   border-radius: 50%;
-  background: #ffffff;
-  animation: twinkle 3s ease-in-out infinite;
+  background: white;
+  animation: star-twinkle 3s ease-in-out infinite;
 }
-@keyframes twinkle {
-0%, 100% { opacity: 0.2; transform: scale(1);
+.s1  { width: 3rpx; height: 3rpx; top: 8%;  left: 12%; opacity: 0.8; animation-delay: 0s;
 }
-50% { opacity: 0.8; transform: scale(1.4);
+.s2  { width: 2rpx; height: 2rpx; top: 15%; left: 75%; opacity: 0.6; animation-delay: 0.5s;
 }
+.s3  { width: 4rpx; height: 4rpx; top: 25%; left: 35%; opacity: 0.9; animation-delay: 1s;
 }
-.home-scroll {
-  position: relative;
-  z-index: 1;
-  padding: 0 28rpx;
+.s4  { width: 2rpx; height: 2rpx; top: 40%; left: 90%; opacity: 0.7; animation-delay: 1.5s;
+}
+.s5  { width: 3rpx; height: 3rpx; top: 60%; left: 5%;  opacity: 0.8; animation-delay: 0.8s;
+}
+.s6  { width: 2rpx; height: 2rpx; top: 70%; left: 55%; opacity: 0.6; animation-delay: 2s;
+}
+.s7  { width: 4rpx; height: 4rpx; top: 85%; left: 80%; opacity: 0.9; animation-delay: 0.3s;
+}
+.s8  { width: 3rpx; height: 3rpx; top: 90%; left: 25%; opacity: 0.7; animation-delay: 1.2s;
+}
+.nebula-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60rpx);
+  opacity: 0.06;
+}
+.ng1 { width: 400rpx; height: 400rpx; background: #9b87d1; top: -100rpx; left: -100rpx;
+}
+.ng2 { width: 300rpx; height: 300rpx; background: #60b8e0; bottom: -80rpx; right: -80rpx;
+}
+@keyframes star-twinkle {
+0%, 100% { opacity: 0.8; transform: scale(1);
+}
+50%       { opacity: 0.2; transform: scale(0.5);
+}
 }
 
-/* Header */
-.page-header {
-  padding-top: 80rpx;
-  padding-bottom: 32rpx;
+/* ── 顶部标题栏 ─────────────────────────────── */
+.top-bar {
+  padding: 80rpx 32rpx 20rpx;
+  background: rgba(10, 10, 26, 0.7);
+  -webkit-backdrop-filter: blur(20rpx);
+          backdrop-filter: blur(20rpx);
+  border-bottom: 1rpx solid rgba(155, 135, 209, 0.15);
+  position: relative;
+  z-index: 10;
+}
+.top-bar-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12rpx;
+  gap: 8rpx;
 }
-.header-badge {
-  background: rgba(139,111,209,0.15);
-  border: 1rpx solid rgba(139,111,209,0.35);
+.top-badge {
+  background: rgba(155, 135, 209, 0.12);
+  border: 1rpx solid rgba(155, 135, 209, 0.35);
   border-radius: 30rpx;
-  padding: 8rpx 24rpx;
+  padding: 6rpx 22rpx;
   font-size: 22rpx;
-  color: #a888e8;
+  color: #9b87d1;
   letter-spacing: 2rpx;
 }
-.header-title {
-  font-size: 56rpx;
-  font-weight: bold;
-  color: #f0e8ff;
-  letter-spacing: 4rpx;
-  display: block;
-  text-align: center;
-}
-.header-subtitle {
-  font-size: 24rpx;
-  color: #5a4878;
-  letter-spacing: 6rpx;
-  display: block;
-  text-align: center;
-}
-
-/* 每日星语 */
-.quote-card {
-  background: linear-gradient(135deg, rgba(139,111,209,0.08), rgba(80,50,140,0.05));
-  border: 1rpx solid rgba(139,111,209,0.18);
-  border-radius: 20rpx;
-  padding: 28rpx 32rpx;
-  margin-bottom: 32rpx;
-  display: flex;
-  align-items: flex-start;
-  gap: 16rpx;
-}
-.quote-star { font-size: 28rpx; color: #8b6fd1; flex-shrink: 0; margin-top: 4rpx;
-}
-.quote-text { font-size: 28rpx; color: #c4a8f0; line-height: 1.7; font-style: italic;
-}
-
-/* 本命盘提示 */
-.natal-hint {
-  background: linear-gradient(135deg, rgba(240,200,80,0.08), rgba(200,150,50,0.05));
-  border: 1rpx solid rgba(240,200,80,0.2);
-  border-radius: 20rpx;
-  padding: 24rpx 28rpx;
-  margin-bottom: 32rpx;
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-}
-.hint-icon { font-size: 44rpx; flex-shrink: 0;
-}
-.hint-content { flex: 1;
-}
-.hint-title { font-size: 30rpx; color: #f0d060; font-weight: 600; display: block; margin-bottom: 6rpx;
-}
-.hint-desc { font-size: 24rpx; color: #a09040;
-}
-.hint-arrow { font-size: 40rpx; color: #806a20;
-}
-.section-title {
-  font-size: 24rpx;
-  color: #5a4878;
+.top-title {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #f0eaff;
   letter-spacing: 3rpx;
-  margin-bottom: 20rpx;
-  padding-left: 4rpx;
+  display: block;
+  text-shadow: 0 0 30rpx rgba(155, 135, 209, 0.5);
+}
+.top-sub {
+  font-size: 22rpx;
+  color: rgba(155, 135, 209, 0.6);
+  letter-spacing: 2rpx;
   display: block;
 }
 
-/* 功能卡片 */
-.feature-card {
+/* ── 太阳系画布 ─────────────────────────────── */
+.solar-canvas-wrap {
+  flex: 1;
   position: relative;
-  border-radius: 28rpx;
-  margin-bottom: 24rpx;
   overflow: hidden;
-  min-height: 320rpx;
 }
-.natal-card { background: linear-gradient(145deg, #12102a 0%, #1a1035 60%, #0f0d20 100%); border: 1rpx solid rgba(184,158,232,0.2);
-}
-.synastry-card { background: linear-gradient(145deg, #0f1a2a 0%, #0d1535 60%, #0a1020 100%); border: 1rpx solid rgba(100,180,255,0.2);
-}
-.transit-card { background: linear-gradient(145deg, #1a100a 0%, #231430 60%, #150f0a 100%); border: 1rpx solid rgba(255,160,80,0.2);
-}
-.card-glow {
+
+/* 轨道圈 */
+.orbit-ring {
   position: absolute;
-  top: -80rpx; right: -80rpx;
-  width: 300rpx; height: 300rpx;
   border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.25;
+  border: 1rpx solid rgba(155, 135, 209, 0.12);
+  left: 375rpx;
+  top: 375rpx;
   pointer-events: none;
 }
-.natal-glow { background: radial-gradient(circle, #8b6fd1, transparent);
-}
-.synastry-glow { background: radial-gradient(circle, #4a90e2, transparent);
-}
-.transit-glow { background: radial-gradient(circle, #e07820, transparent);
-}
-.card-content {
-  position: relative;
-  z-index: 2;
-  padding: 36rpx 36rpx 32rpx;
-}
-.card-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20rpx;
-}
-.card-icon-wrap {
-  width: 72rpx; height: 72rpx;
-  border-radius: 20rpx;
+
+/* 行星节点 */
+.planet-node {
+  position: absolute;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 5;
 }
-.natal-icon-wrap { background: rgba(139,111,209,0.2); border: 1rpx solid rgba(139,111,209,0.3);
-}
-.synastry-icon-wrap { background: rgba(74,144,226,0.2); border: 1rpx solid rgba(74,144,226,0.3);
-}
-.transit-icon-wrap { background: rgba(224,120,32,0.2); border: 1rpx solid rgba(224,120,32,0.3);
-}
-.card-icon { font-size: 36rpx;
-}
-.card-tag {
-  font-size: 22rpx;
-  padding: 6rpx 18rpx;
-  border-radius: 20rpx;
-  background: rgba(139,111,209,0.15);
-  border: 1rpx solid rgba(139,111,209,0.25);
-  color: #a888e8;
-}
-.synastry-tag { background: rgba(74,144,226,0.15); border-color: rgba(74,144,226,0.25); color: #64b4ff;
-}
-.transit-tag { background: rgba(224,120,32,0.15); border-color: rgba(224,120,32,0.25); color: #ffaa44;
-}
-.card-title {
-  font-size: 44rpx;
+.planet-label {
   font-weight: bold;
-  color: #f0e8ff;
-  display: block;
-  margin-bottom: 6rpx;
-}
-.card-subtitle {
-  font-size: 22rpx;
-  color: #5a4878;
-  letter-spacing: 4rpx;
-  display: block;
-  margin-bottom: 20rpx;
-}
-.card-desc {
-  font-size: 26rpx;
-  color: #8a7aaa;
-  line-height: 1.75;
-  display: block;
-  margin-bottom: 24rpx;
-}
-.card-tags-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-}
-.tag {
-  font-size: 22rpx;
-  color: #7a6a9a;
-  background: rgba(255,255,255,0.04);
-  border: 1rpx solid rgba(255,255,255,0.07);
-  padding: 6rpx 18rpx;
-  border-radius: 20rpx;
+  line-height: 1;
+  z-index: 1;
 }
 
-/* 行星装饰 */
-.card-planet-deco {
+/* 土星环效果 */
+.saturn-ring {
   position: absolute;
-  bottom: -20rpx;
-  right: -20rpx;
-  width: 200rpx;
-  height: 200rpx;
-  z-index: 1;
+  width: 200%;
+  height: 40%;
+  border: 2rpx solid rgba(200, 184, 144, 0.6);
+  border-radius: 50%;
+  left: -50%;
+  top: 30%;
+  transform: rotateX(70deg);
   pointer-events: none;
 }
-.orbit-ring {
+
+/* ── 四角功能按钮 ─────────────────────────────── */
+.corner-btn {
   position: absolute;
-  border: 1rpx solid rgba(139,111,209,0.15);
-  border-radius: 50%;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  animation: orbit-spin 12s linear infinite;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  z-index: 20;
 }
-.ring-1 { width: 120rpx; height: 120rpx;
+.btn-tl { top: 28rpx; left: 24rpx;
 }
-.ring-2 { width: 180rpx; height: 180rpx; animation-duration: 20s;
+.btn-tr { top: 28rpx; right: 24rpx;
 }
-.ring-fast { animation-duration: 7s !important;
+.btn-bl { bottom: 90rpx; left: 24rpx;
 }
-.synastry-deco .orbit-ring { border-color: rgba(74,144,226,0.15);
+.btn-br { bottom: 90rpx; right: 24rpx;
 }
-.transit-deco .orbit-ring { border-color: rgba(224,120,32,0.15);
+.corner-icon-wrap {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 24rpx;
+  border: 1.5rpx solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-backdrop-filter: blur(12rpx);
+          backdrop-filter: blur(12rpx);
 }
-.planet-dot {
-  position: absolute;
-  width: 16rpx; height: 16rpx;
-  border-radius: 50%;
-  background: radial-gradient(circle, #c4a8f0, #8b6fd1);
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  box-shadow: 0 0 12rpx rgba(139,111,209,0.5);
+.corner-icon {
+  font-size: 32rpx;
+  font-weight: bold;
 }
-.synastry-deco .planet-dot { background: radial-gradient(circle, #80c0ff, #4a90e2); box-shadow: 0 0 12rpx rgba(74,144,226,0.5);
-}
-.transit-deco .planet-dot { background: radial-gradient(circle, #ffcc80, #e07820); box-shadow: 0 0 12rpx rgba(224,120,32,0.5);
-}
-.dot-a {
-  top: 30%; left: 30%;
-  width: 12rpx; height: 12rpx;
-}
-.dot-b {
-  top: 65%; left: 65%;
-  width: 10rpx; height: 10rpx;
-  background: radial-gradient(circle, #ffb8d8, #e060a0) !important;
-  box-shadow: 0 0 10rpx rgba(224,96,160,0.4) !important;
-}
-@keyframes orbit-spin {
-from { transform: translate(-50%, -50%) rotate(0deg);
-}
-to { transform: translate(-50%, -50%) rotate(360deg);
-}
+.corner-label {
+  font-size: 22rpx;
+  color: rgba(200, 190, 230, 0.7);
+  font-weight: 500;
 }
 
-/* 底部 */
-.footer-note {
+/* ── 底部提示 ─────────────────────────────── */
+.bottom-hint {
+  padding: 10rpx 0 16rpx;
   text-align: center;
-  padding: 32rpx 0 16rpx;
+  z-index: 10;
 }
-.footer-text {
+.hint-text {
   font-size: 22rpx;
-  color: #3a2860;
+  color: rgba(155, 135, 209, 0.45);
+  letter-spacing: 1rpx;
+}
+
+/* ── 建立星盘提示条 ─────────────────────────────── */
+.natal-prompt {
+  position: absolute;
+  bottom: 160rpx;
+  left: 24rpx;
+  right: 24rpx;
+  background: rgba(20, 18, 40, 0.92);
+  -webkit-backdrop-filter: blur(20rpx);
+          backdrop-filter: blur(20rpx);
+  border: 1.5rpx solid rgba(155, 135, 209, 0.3);
+  border-radius: 20rpx;
+  padding: 20rpx 24rpx;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  z-index: 15;
+  overflow: hidden;
+}
+.prompt-glow {
+  position: absolute;
+  left: -30rpx; top: -30rpx;
+  width: 120rpx; height: 120rpx;
+  background: radial-gradient(circle, rgba(155, 135, 209, 0.2), transparent 70%);
+  pointer-events: none;
+}
+.prompt-icon { font-size: 38rpx; flex-shrink: 0;
+}
+.prompt-content { flex: 1;
+}
+.prompt-title { font-size: 28rpx; color: #e8e0ff; font-weight: 600; display: block; margin-bottom: 4rpx;
+}
+.prompt-desc { font-size: 22rpx; color: rgba(155, 135, 209, 0.6);
+}
+.prompt-arrow { font-size: 36rpx; color: rgba(155, 135, 209, 0.5);
+}
+
+/* ══════════════════════════════════════
+   行星信息弹窗
+══════════════════════════════════════ */
+.planet-popup-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 15, 0.65);
+  -webkit-backdrop-filter: blur(6rpx);
+          backdrop-filter: blur(6rpx);
+  display: flex;
+  align-items: flex-end;
+  z-index: 200;
+}
+.planet-popup {
+  background: rgba(16, 14, 34, 0.97);
+  -webkit-backdrop-filter: blur(24rpx);
+          backdrop-filter: blur(24rpx);
+  border-top-left-radius: 36rpx;
+  border-top-right-radius: 36rpx;
+  padding: 8rpx 28rpx 60rpx;
+  width: 100%;
+  border-top: 1rpx solid rgba(155, 135, 209, 0.2);
+  box-shadow: 0 -8rpx 48rpx rgba(155, 135, 209, 0.12);
+}
+.popup-drag-bar {
+  width: 60rpx;
+  height: 6rpx;
+  background: rgba(155, 135, 209, 0.25);
+  border-radius: 3rpx;
+  margin: 12rpx auto 28rpx;
+}
+.planet-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  margin-bottom: 28rpx;
+}
+.planet-popup-icon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 20rpx;
+  border: 1.5rpx solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.planet-popup-symbol { font-size: 34rpx;
+}
+.planet-popup-meta { flex: 1;
+}
+.planet-popup-name { font-size: 30rpx; color: #e8e0ff; font-weight: 700; display: block; margin-bottom: 5rpx;
+}
+.planet-popup-desc { font-size: 23rpx; color: rgba(155, 135, 209, 0.6);
+}
+.popup-close {
+  width: 48rpx; height: 48rpx;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28rpx; color: rgba(155, 135, 209, 0.4);
+  background: rgba(155, 135, 209, 0.08);
+  border-radius: 14rpx;
+}
+.planet-pos-info {
+  display: flex;
+  gap: 16rpx;
+  flex-wrap: wrap;
+}
+.pos-item {
+  flex: 1;
+  min-width: 140rpx;
+  background: rgba(30, 24, 60, 0.8);
+  border: 1.5rpx solid rgba(155, 135, 209, 0.18);
+  border-radius: 16rpx;
+  padding: 18rpx 16rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+}
+.pos-label { font-size: 22rpx; color: rgba(155, 135, 209, 0.55);
+}
+.pos-val { font-size: 28rpx; color: #e8e0ff; font-weight: 600;
+}
+.planet-no-data {
+  text-align: center;
+  padding: 8rpx 0;
+}
+.no-data-text { font-size: 25rpx; color: rgba(155, 135, 209, 0.5); display: block; margin-bottom: 20rpx; line-height: 1.6;
+}
+.no-data-btn {
+  display: inline-flex;
+  background: rgba(155, 135, 209, 0.1);
+  border: 1rpx solid rgba(155, 135, 209, 0.3);
+  border-radius: 30rpx;
+  padding: 12rpx 32rpx;
+}
+.no-data-btn text { font-size: 26rpx; color: #9b87d1;
+}
+
+/* ══════════════════════════════════════
+   四角功能弹窗
+══════════════════════════════════════ */
+.feature-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 15, 0.7);
+  -webkit-backdrop-filter: blur(8rpx);
+          backdrop-filter: blur(8rpx);
+  display: flex;
+  align-items: flex-end;
+  z-index: 200;
+}
+.feature-popup {
+  background: rgba(16, 14, 34, 0.98);
+  -webkit-backdrop-filter: blur(28rpx);
+          backdrop-filter: blur(28rpx);
+  border-top-left-radius: 40rpx;
+  border-top-right-radius: 40rpx;
+  padding: 8rpx 32rpx 80rpx;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14rpx;
+  border-top: 1rpx solid rgba(155, 135, 209, 0.2);
+  box-shadow: 0 -8rpx 48rpx rgba(155, 135, 209, 0.12);
+  position: relative;
+}
+.feature-close {
+  position: absolute;
+  top: 32rpx;
+  right: 28rpx;
+  width: 48rpx; height: 48rpx;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28rpx; color: rgba(155, 135, 209, 0.4);
+  background: rgba(155, 135, 209, 0.08);
+  border-radius: 14rpx;
+}
+.feature-icon-wrap {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 28rpx;
+  border: 1.5rpx solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6rpx;
+  margin-top: 10rpx;
+}
+.feature-icon { font-size: 44rpx; font-weight: bold;
+}
+.feature-title {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #e8e0ff;
+  display: block;
+  text-align: center;
+}
+.feature-subtitle {
+  font-size: 22rpx;
+  color: rgba(155, 135, 209, 0.5);
+  letter-spacing: 4rpx;
+  display: block;
+  text-align: center;
+}
+.feature-desc {
+  font-size: 27rpx;
+  color: rgba(200, 190, 230, 0.65);
+  line-height: 1.75;
+  text-align: center;
+  display: block;
+  margin: 8rpx 0 16rpx;
+  padding: 0 12rpx;
+}
+.feature-action-btn {
+  width: 100%;
+  padding: 30rpx;
+  border-radius: 20rpx;
+  text-align: center;
+  box-shadow: 0 6rpx 30rpx rgba(0,0,0,0.3);
+}
+.feature-action-text {
+  font-size: 32rpx;
+  color: white;
+  font-weight: 600;
   letter-spacing: 2rpx;
 }

@@ -43,7 +43,14 @@ public enum ResultCode {
     POINT_ACCOUNT_NOT_FOUND(6002, "积分账户不存在"),
     POINT_DEDUCT_FAILED(6003, "积分扣除失败，请重试"),
     DUPLICATE_SETTLEMENT(6004, "重复结算，已忽略"),
-    POINT_ORDER_NOT_FOUND(6005, "积分充值订单不存在");
+    POINT_ORDER_NOT_FOUND(6005, "积分充值订单不存在"),
+
+    // 占星错误 7xxx
+    BIRTH_INFO_NOT_SET(7001, "请先设置出生信息"),
+    SYNASTRY_PARTNER_NOT_SET(7002, "请先设置和盘对方信息"),
+    SYNASTRY_CHART_NOT_FOUND(7003, "请先计算和盘后再进行解读"),
+    TRANSIT_CHART_NOT_FOUND(7004, "请先计算流运后再进行解读"),
+    NATAL_CHART_NOT_FOUND(7005, "请先计算本命盘后再进行解读");
 
     private final Integer code;
     private final String message;

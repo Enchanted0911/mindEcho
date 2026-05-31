@@ -4,89 +4,89 @@
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "心屿",
-        "navigationBarBackgroundColor": "#0f0f1a",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#0f0f1a"
+        "navigationBarBackgroundColor": "#f8f5ff",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f8f5ff"
       }
     },
     {
       "path": "pages/chat/index",
       "style": {
         "navigationBarTitleText": "陪伴",
-        "navigationBarBackgroundColor": "#0f0f1a",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#0f0f1a"
+        "navigationBarBackgroundColor": "#f5f2ff",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f5f2ff"
       }
     },
     {
       "path": "pages/diary/index",
       "style": {
         "navigationBarTitleText": "日记",
-        "navigationBarBackgroundColor": "#0f0f1a",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#0f0f1a"
+        "navigationBarBackgroundColor": "#f5f2ff",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f5f2ff"
       }
     },
     {
       "path": "pages/astrology/index",
       "style": {
         "navigationBarTitleText": "星盘",
-        "navigationBarBackgroundColor": "#0a0a18",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#0a0a18"
+        "navigationBarBackgroundColor": "#f5f2ff",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f5f2ff"
       }
     },
     {
       "path": "pages/astrology/natal",
       "style": {
         "navigationBarTitleText": "本命盘",
-        "navigationBarBackgroundColor": "#0a0a18",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#0a0a18"
+        "navigationBarBackgroundColor": "#f5f2ff",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f5f2ff"
       }
     },
     {
       "path": "pages/astrology/synastry",
       "style": {
         "navigationBarTitleText": "和盘",
-        "navigationBarBackgroundColor": "#080e1a",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#080e1a"
+        "navigationBarBackgroundColor": "#f0f5ff",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f0f5ff"
       }
     },
     {
       "path": "pages/astrology/transit",
       "style": {
         "navigationBarTitleText": "流运",
-        "navigationBarBackgroundColor": "#0e0a08",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#0e0a08"
+        "navigationBarBackgroundColor": "#f5f2ff",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f5f2ff"
       }
     },
     {
       "path": "pages/me/index",
       "style": {
         "navigationBarTitleText": "我的",
-        "navigationBarBackgroundColor": "#0f0f1a",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#0f0f1a"
+        "navigationBarBackgroundColor": "#f5f2ff",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#f5f2ff"
       }
     },
     {
       "path": "pages/vip/index",
       "style": {
         "navigationBarTitleText": "开通会员",
-        "navigationBarBackgroundColor": "#0f0f1a",
-        "navigationBarTextStyle": "white",
-        "backgroundColor": "#0f0f1a"
+        "navigationBarBackgroundColor": "#fdf8ff",
+        "navigationBarTextStyle": "black",
+        "backgroundColor": "#fdf8ff"
       }
     }
   ],
   "tabBar": {
-    "color": "#666",
-    "selectedColor": "#b89ee8",
-    "backgroundColor": "#13131f",
-    "borderStyle": "black",
+    "color": "#b0a8cc",
+    "selectedColor": "#9b87d1",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
     "list": [
       {
         "pagePath": "pages/chat/index",
@@ -115,12 +115,12 @@
     ]
   },
   "globalStyle": {
-    "navigationBarTextStyle": "white",
+    "navigationBarTextStyle": "black",
     "navigationBarTitleText": "心屿",
-    "navigationBarBackgroundColor": "#0f0f1a",
-    "backgroundColor": "#0f0f1a",
+    "navigationBarBackgroundColor": "#f5f2ff",
+    "backgroundColor": "#f5f2ff",
     "app-plus": {
-      "background": "#0f0f1a"
+      "background": "#f5f2ff"
     }
   }
 }

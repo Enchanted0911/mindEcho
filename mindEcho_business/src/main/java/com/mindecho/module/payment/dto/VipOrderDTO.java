@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 会员订单 DTO
@@ -17,7 +18,7 @@ import java.time.OffsetDateTime;
 @AllArgsConstructor
 public class VipOrderDTO {
 
-    private String id;
+    private UUID id;
     private String orderNo;
     private BigDecimal amount;
     private String status;

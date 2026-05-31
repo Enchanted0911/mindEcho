@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 聊天消息实体
@@ -12,16 +13,16 @@ import java.time.OffsetDateTime;
 @TableName("chat_message")
 public class ChatMessage {
 
-    @TableId(type = IdType.ASSIGN_UUID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private UUID id;
 
     /** 会话ID */
     @TableField("session_id")
-    private String sessionId;
+    private UUID sessionId;
 
     /** 用户ID */
     @TableField("user_id")
-    private String userId;
+    private UUID userId;
 
     /** 角色：user / assistant */
     @TableField("role")

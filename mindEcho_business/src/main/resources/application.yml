@@ -15,7 +15,7 @@ spring:
       - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:mindecho}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:mindecho}?stringtype=unspecified
     username: ${DB_USERNAME:}
     password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
@@ -76,12 +76,13 @@ spring:
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
   type-aliases-package: com.mindecho.module
+  type-handlers-package: com.mindecho.common.config
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
   global-config:
     db-config:
-      id-type: assign_uuid
+      id-type: auto
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
@@ -109,11 +110,26 @@ mindecho:
     medium-risk-keywords: 活不下去,太痛苦了,撑不住了,绝望,没有希望
   safety-hotline: "北京心理危机研究与干intervention中心：010-82951332；全国心理援助热线：400-161-9995"
   free-daily-messages: 1000
+  reranker:
+    # Ollama 服务地址（与 embedding 共用同一 ollama 实例）
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    # 部署的 BGE Reranker 模型名
+    model: dengcao/bge-reranker-v2-m3
+    # Rerank 后最终保留的记忆条数
+    top-k: 5
+    # relevance_score 截断阈值（低于此值丢弃）
+    score-cutoff: 0.05
   memory:
     summary-threshold: 6
+    # 结构化记忆 Redis 缓存配置
+    cache-ttl-hours: 24             # 每个用户结构化记忆缓存 TTL（小时），防止内存无限堆积
+    # 记忆遗忘配置
+    max-memory-count: 1000          # 每个用户 Memory 表最大存储条数，超出触发遗忘压缩
+    max-vector-count: 1000          # 每个用户 memory_vector 表最大存储条数，超出触发遗忘压缩
+    half-life-days: 30              # recency_norm 指数衰减半衰期（天），推荐30天
 
 billing:
-  enabled: ${BILLING_ENABLED:true}
+  enabled: ${BILLING_ENABLED:false}
   base-points:
     chat: 5
     astrology: 10

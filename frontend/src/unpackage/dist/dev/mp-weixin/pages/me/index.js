@@ -21,6 +21,18 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     function goToVip() {
       common_vendor.index.navigateTo({ url: "/pages/vip/index" });
     }
+    function handleNotification() {
+      common_vendor.index.showToast({ title: "通知设置即将上线", icon: "none" });
+    }
+    function handlePrivacy() {
+      common_vendor.index.showToast({ title: "隐私设置即将上线", icon: "none" });
+    }
+    function handleHelp() {
+      common_vendor.index.showToast({ title: "如有问题请联系客服", icon: "none" });
+    }
+    function handleAgreement() {
+      common_vendor.index.showToast({ title: "正在加载用户协议...", icon: "none" });
+    }
     function handleLogout() {
       common_vendor.index.showModal({
         title: "退出登录",
@@ -36,31 +48,38 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       var _a, _b, _c;
       return common_vendor.e({
         a: common_vendor.t(((_b = (_a = common_vendor.unref(userStore).userInfo) == null ? void 0 : _a.nickname) == null ? void 0 : _b[0]) || "🌙"),
-        b: common_vendor.t(((_c = common_vendor.unref(userStore).userInfo) == null ? void 0 : _c.nickname) || "用户"),
-        c: common_vendor.unref(userStore).isVip
+        b: common_vendor.unref(userStore).isVip
+      }, common_vendor.unref(userStore).isVip ? {} : {}, {
+        c: common_vendor.t(((_c = common_vendor.unref(userStore).userInfo) == null ? void 0 : _c.nickname) || "用户"),
+        d: common_vendor.unref(userStore).isVip
       }, common_vendor.unref(userStore).isVip ? {} : {
-        d: common_vendor.o(goToVip, "35")
+        e: common_vendor.o(goToVip, "65")
       }, {
-        e: common_vendor.t(personality.value.emoji),
-        f: common_vendor.t(personality.value.label),
-        g: common_vendor.t(personality.value.desc),
-        h: common_vendor.o(($event) => common_vendor.index.switchTab({
+        f: common_vendor.o(goToVip, "bd"),
+        g: common_vendor.t(personality.value.emoji),
+        h: common_vendor.t(personality.value.label),
+        i: common_vendor.t(personality.value.desc),
+        j: common_vendor.o(($event) => common_vendor.index.switchTab({
           url: "/pages/chat/index"
-        }), "e7"),
-        i: common_vendor.o(($event) => common_vendor.index.switchTab({
+        }), "8d"),
+        k: common_vendor.o(($event) => common_vendor.index.switchTab({
           url: "/pages/astrology/index"
-        }), "c6"),
-        j: common_vendor.o(($event) => common_vendor.index.navigateTo({
-          url: "/pages/astrology/natal"
-        }), "7b"),
-        k: common_vendor.o(($event) => common_vendor.index.navigateTo({
-          url: "/pages/astrology/synastry"
-        }), "56"),
+        }), "f8"),
         l: common_vendor.o(($event) => common_vendor.index.navigateTo({
+          url: "/pages/astrology/natal"
+        }), "77"),
+        m: common_vendor.o(($event) => common_vendor.index.navigateTo({
+          url: "/pages/astrology/synastry"
+        }), "1e"),
+        n: common_vendor.o(($event) => common_vendor.index.navigateTo({
           url: "/pages/astrology/transit"
-        }), "73"),
-        m: common_vendor.o(goToVip, "ae"),
-        n: common_vendor.o(handleLogout, "6a")
+        }), "c1"),
+        o: common_vendor.o(goToVip, "c4"),
+        p: common_vendor.o(handleNotification, "3f"),
+        q: common_vendor.o(handlePrivacy, "4d"),
+        r: common_vendor.o(handleHelp, "24"),
+        s: common_vendor.o(handleAgreement, "cc"),
+        t: common_vendor.o(handleLogout, "d0")
       });
     };
   }

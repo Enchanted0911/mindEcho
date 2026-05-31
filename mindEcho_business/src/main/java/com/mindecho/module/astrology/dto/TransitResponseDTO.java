@@ -22,8 +22,5 @@ public class TransitResponseDTO {
 
     /** 流运摘要（最近 N 天最重要的流运主题） */
     private JsonNode summary;
-
-    /** 流运原始完整数据（用于传入解读接口） */
-    private JsonNode chart;
 }
 

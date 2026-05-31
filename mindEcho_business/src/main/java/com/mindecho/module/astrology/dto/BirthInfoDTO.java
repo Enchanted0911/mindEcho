@@ -52,7 +52,7 @@ public class BirthInfoDTO {
     /** 出生地经度（可选，优先级高于 city 解析） */
     private Double longitude;
 
-    /** 时区偏移量（小时），如 +8 → 东八区，可选，不传则由 Python 服务根据城市推断 */
-    private Double timezone;
+    /** IANA 时区名称（如 Asia/Shanghai），可选，不传则由 Java 层根据经纬度推断 */
+    private String timezone;
 }
 

@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Prompt 构建服务
@@ -45,9 +46,6 @@ public class PromptService {
             %s
             """;
 
-    /**
-     * 构建静态 System Prompt（人格设定）
-     */
     public String buildStaticSystemPrompt(String personalityCode) {
         AiPersonality personality = personalityService.getByCode(personalityCode);
         return String.format(STATIC_SYSTEM_PROMPT,
@@ -55,24 +53,15 @@ public class PromptService {
                 personality.getSystemPrompt());
     }
 
-    /**
-     * 构建动态记忆上下文（每次对话可能变化）
-     *
-     * @param userId      用户 ID（UUID 字符串）
-     * @param userMessage 当前用户消息
-     */
-    public String buildMemorySystemPrompt(String userId, String userMessage) {
+    public String buildMemorySystemPrompt(UUID userId, String userMessage) {
         return buildMemoryContext(userId, userMessage);
     }
 
-    /**
-     * 兼容旧签名（不传 userMessage 时降级为按重要度检索）
-     */
-    public String buildMemorySystemPrompt(String userId) {
+    public String buildMemorySystemPrompt(UUID userId) {
         return buildMemoryContext(userId, null);
     }
 
-    private String buildMemoryContext(String userId, String userMessage) {
+    private String buildMemoryContext(UUID userId, String userMessage) {
         List<String> contents = memoryService.recallRelevantMemoryContents(userId, userMessage);
         if (contents == null || contents.isEmpty()) {
             return "";

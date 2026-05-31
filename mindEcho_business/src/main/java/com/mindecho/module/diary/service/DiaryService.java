@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 /**
  * 情绪日记服务
@@ -43,7 +44,7 @@ public class DiaryService {
     /**
      * 保存或更新日记
      */
-    public DiaryEntryDTO saveDiary(String userId, SaveDiaryRequest request) {
+    public DiaryEntryDTO saveDiary(UUID userId, SaveDiaryRequest request) {
         LocalDate date = request.getDiaryDate() != null ? request.getDiaryDate() : LocalDate.now();
 
         DiaryEntry existing = diaryEntryMapper.selectOne(
@@ -90,7 +91,7 @@ public class DiaryService {
     /**
      * 获取 AI 总结（懒加载）
      */
-    public DiaryEntryDTO getAiSummary(String userId, String diaryId) {
+    public DiaryEntryDTO getAiSummary(UUID userId, UUID diaryId) {
         DiaryEntry entry = diaryEntryMapper.selectById(diaryId);
         if (entry == null || !entry.getUserId().equals(userId) || Integer.valueOf(1).equals(entry.getDeleted())) {
             return null;
@@ -131,7 +132,7 @@ public class DiaryService {
     /**
      * 分页查询日记列表
      */
-    public IPage<DiaryEntryDTO> getDiaryList(String userId, Integer page, Integer size) {
+    public IPage<DiaryEntryDTO> getDiaryList(UUID userId, Integer page, Integer size) {
         Page<DiaryEntry> pageParam = new Page<>(page, size);
         IPage<DiaryEntry> entryPage = diaryEntryMapper.selectPage(pageParam,
                 new LambdaQueryWrapper<DiaryEntry>()
@@ -145,7 +146,7 @@ public class DiaryService {
     /**
      * 获取某天的日记
      */
-    public DiaryEntryDTO getDiaryByDate(String userId, LocalDate date) {
+    public DiaryEntryDTO getDiaryByDate(UUID userId, LocalDate date) {
         DiaryEntry entry = diaryEntryMapper.selectOne(
                 new LambdaQueryWrapper<DiaryEntry>()
                         .eq(DiaryEntry::getUserId, userId)
@@ -156,7 +157,7 @@ public class DiaryService {
     }
 
     @Async
-    public void saveDiaryEmotionMemoryAsync(String userId, DiaryEntry entry) {
+    public void saveDiaryEmotionMemoryAsync(UUID userId, DiaryEntry entry) {
         try {
             if (!StringUtils.hasText(entry.getContent())) return;
 

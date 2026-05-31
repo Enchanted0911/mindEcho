@@ -17,6 +17,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 /**
  * 支付 Controller
  *
@@ -55,7 +57,7 @@ public class PaymentController {
      */
     @PostMapping("/order")
     public Result<VipOrderDTO> createOrder(@Valid @RequestBody CreateOrderRequest request) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(paymentService.createOrder(userId, request));
     }
 
@@ -67,7 +69,7 @@ public class PaymentController {
      */
     @PostMapping("/point-order")
     public Result<PointOrderDTO> createPointOrder(@Valid @RequestBody CreatePointOrderRequest request) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(paymentService.createPointOrder(userId, request));
     }
 
@@ -77,7 +79,7 @@ public class PaymentController {
      */
     @GetMapping("/point-order/{orderNo}")
     public Result<PointOrderDTO> getPointOrder(@PathVariable("orderNo") String orderNo) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(paymentService.getPointOrder(userId, orderNo));
     }
 
@@ -90,7 +92,7 @@ public class PaymentController {
      */
     @GetMapping("/order/{orderNo}")
     public Result<VipOrderDTO> getOrder(@PathVariable("orderNo") String orderNo) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(paymentService.getOrder(userId, orderNo));
     }
 

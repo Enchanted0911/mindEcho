@@ -35,22 +35,33 @@ function createSseRequest(path, data, onChunk, onDone, onError) {
     sseBuffer = frames.pop() ?? "";
     for (const frame of frames) {
       const lines = frame.split("\n");
+      let currentEvent = "";
+      let currentData = "";
       for (const line of lines) {
-        if (line.startsWith("data:")) {
-          const data2 = line.slice(5).trim();
-          if (data2 === "[DONE]") {
-            triggerDone();
-            return;
-          }
-          if (data2) {
-            onChunk(data2);
-          }
-        } else if (line.startsWith("event:")) {
-          const eventName = line.slice(6).trim();
-          if (eventName === "done") {
-            triggerDone();
+        if (line.startsWith("event:")) {
+          currentEvent = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          currentData = line.slice(5).trim();
+        }
+      }
+      if (currentEvent === "done" || currentData === "[DONE]") {
+        triggerDone();
+        return;
+      } else if (currentEvent === "error") {
+        let errorMessage = "服务出现问题，请稍后重试";
+        if (currentData) {
+          try {
+            const errorPayload = JSON.parse(currentData);
+            if (errorPayload.message) {
+              errorMessage = errorPayload.message;
+            }
+          } catch (_) {
           }
         }
+        onError(new Error(errorMessage));
+        return;
+      } else if (currentData) {
+        onChunk(currentData);
       }
     }
   };
@@ -83,7 +94,7 @@ function createSseRequest(path, data, onChunk, onDone, onError) {
       sseBuffer += text;
       flushBuffer();
     } catch (e) {
-      common_vendor.index.__f__("error", "at api/chat.ts:193", "Chunk parse error:", e);
+      common_vendor.index.__f__("error", "at api/chat.ts:208", "Chunk parse error:", e);
     }
   });
   return requestTask;

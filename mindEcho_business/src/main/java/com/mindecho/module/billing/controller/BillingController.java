@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.UUID;
+
 /**
  * 积分计费 Controller
  *
@@ -41,7 +43,7 @@ public class BillingController {
      */
     @GetMapping("/account")
     public Result<PointAccountDTO> getAccount() {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(billingQueryService.getAccountInfo(userId));
     }
 
@@ -56,7 +58,7 @@ public class BillingController {
     public Result<IPage<TransactionRecordDTO>> getTransactions(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer size) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(billingQueryService.getTransactionList(userId, page, size));
     }
 
@@ -69,7 +71,7 @@ public class BillingController {
     public Result<IPage<TransactionRecordDTO>> getRechargeList(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer size) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(billingQueryService.getRechargeList(userId, page, size));
     }
 
@@ -82,7 +84,7 @@ public class BillingController {
     public Result<IPage<TransactionRecordDTO>> getConsumeList(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer size) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(billingQueryService.getConsumeList(userId, page, size));
     }
 
@@ -97,7 +99,7 @@ public class BillingController {
     public Result<IPage<UsageRecordDTO>> getUsageList(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer size) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(billingQueryService.getUsageList(userId, page, size));
     }
 }

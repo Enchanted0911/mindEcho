@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.UUID;
+
 /**
  * 发送消息请求
  */
@@ -12,9 +14,8 @@ public class SendMessageRequest {
 
     /**
      * 会话ID（可选，为空则创建新会话）
-     * UUID 字符串格式
      */
-    private String sessionId;
+    private UUID sessionId;
 
     @NotBlank(message = "消息内容不能为空")
     @Size(max = 2000, message = "消息内容不能超过2000字")

@@ -8,9 +8,9 @@ import com.mindecho.common.config.WechatMiniConfig;
 import com.mindecho.common.exception.BusinessException;
 import com.mindecho.common.result.ResultCode;
 import com.mindecho.common.util.JwtUtil;
-import com.mindecho.module.auth.dto.LoginResponse;
-import com.mindecho.module.auth.dto.UpdateBirthInfoRequest;
-import com.mindecho.module.auth.dto.WxLoginRequest;
+import com.mindecho.module.astrology.entity.UserAstrology;
+import com.mindecho.module.astrology.service.UserAstrologyService;
+import com.mindecho.module.auth.dto.*;
 import com.mindecho.module.auth.entity.User;
 import com.mindecho.module.auth.mapper.UserMapper;
 import com.mindecho.module.billing.service.PointAccountService;
@@ -20,10 +20,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.format.DateTimeFormatter;
+import java.util.UUID;
 
 /**
  * 认证服务
+ *
+ * <p>职责：微信登录、用户信息查询。
+ * 出生信息、和盘对方信息、流运日期等占星相关的更新操作由
+ * {@link UserAstrologyService} 负责。
  */
 @Slf4j
 @Service
@@ -38,6 +42,7 @@ public class AuthService {
     private final PersonalityService personalityService;
     private final PointAccountService pointAccountService;
     private final WechatMiniConfig wechatConfig;
+    private final UserAstrologyService userAstrologyService;
 
     /**
      * 微信小程序登录
@@ -65,35 +70,41 @@ public class AuthService {
     /**
      * 获取当前用户信息
      */
-    public LoginResponse.UserInfoDTO getProfile(String userId) {
+    public LoginResponse.UserInfoDTO getProfile(UUID userId) {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(ResultCode.USER_NOT_FOUND);
         }
-        return buildUserInfoDTO(user);
+        UserAstrology astrology = userAstrologyService.getOrInitAstrology(userId);
+        return userAstrologyService.buildUserInfoDTO(user, astrology);
     }
 
     /**
-     * 更新用户出生信息
+     * 更新用户出生信息（委托给 UserAstrologyService）
      */
-    public LoginResponse.UserInfoDTO updateBirthInfo(String userId, UpdateBirthInfoRequest request) {
-        User user = userMapper.selectById(userId);
-        if (user == null) {
-            throw new BusinessException(ResultCode.USER_NOT_FOUND);
-        }
-        user.setBirthCity(request.getBirthCity());
-        user.setBirthLat(request.getBirthLat());
-        user.setBirthLng(request.getBirthLng());
-        user.setBirthTime(request.getBirthTime());
-        userMapper.updateById(user);
-        log.info("Birth info updated for userId={}, city={}", userId, request.getBirthCity());
-        return buildUserInfoDTO(user);
+    public LoginResponse.UserInfoDTO updateBirthInfo(UUID userId, UpdateBirthInfoRequest request) {
+        return userAstrologyService.updateBirthInfo(userId, request);
+    }
+
+    /**
+     * 保存和盘对方出生信息（委托给 UserAstrologyService）
+     */
+    public LoginResponse.UserInfoDTO updateSynastryPartner(UUID userId, UpdateSynastryPartnerRequest request) {
+        return userAstrologyService.updateSynastryPartner(userId, request);
+    }
+
+    /**
+     * 保存流运目标日期（委托给 UserAstrologyService）
+     */
+    public LoginResponse.UserInfoDTO updateTransitDate(UUID userId, UpdateTransitDateRequest request) {
+        return userAstrologyService.updateTransitDate(userId, request);
     }
 
     // ─── 私有方法 ─────────────────────────────────────────────────────────────
 
     /**
-     * 初始化新用户记录和积分账户（在事务方法内调用，事务由调用方保证）
+     * 初始化新用户记录和积分账户（在事务方法内调用）
+     * 同时创建空的 user_astrology 记录
      */
     private User initNewUser(String openid) {
         User user = new User();
@@ -102,7 +113,10 @@ public class AuthService {
         user.setAiPersonality(personalityService.getDefaultCode());
         userMapper.insert(user);
         log.info("New user created: openid={}", openid);
+        // 初始化积分账户
         pointAccountService.getOrCreateAccount(user.getId());
+        // 初始化星盘记录（空记录，等待用户填写出生信息）
+        userAstrologyService.getOrInitAstrology(user.getId());
         return user;
     }
 
@@ -126,26 +140,10 @@ public class AuthService {
     }
 
     private LoginResponse buildLoginResponse(String token, User user) {
+        UserAstrology astrology = userAstrologyService.getOrInitAstrology(user.getId());
         return LoginResponse.builder()
                 .token(token)
-                .userInfo(buildUserInfoDTO(user))
-                .build();
-    }
-
-    private LoginResponse.UserInfoDTO buildUserInfoDTO(User user) {
-        return LoginResponse.UserInfoDTO.builder()
-                .id(user.getId())
-                .nickname(user.getNickname())
-                .avatar(user.getAvatar())
-                .isVip(user.isVip())
-                .aiPersonality(user.getAiPersonality())
-                .vipExpireTime(user.getVipExpireTime() != null
-                        ? user.getVipExpireTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-                        : null)
-                .birthCity(user.getBirthCity())
-                .birthLat(user.getBirthLat())
-                .birthLng(user.getBirthLng())
-                .birthTime(user.getBirthTime())
+                .userInfo(userAstrologyService.buildUserInfoDTO(user, astrology))
                 .build();
     }
 }

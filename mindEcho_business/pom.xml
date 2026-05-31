@@ -68,7 +68,7 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
-            <version>1.0.0</version>
+            <version>1.1.2</version>
         </dependency>
 
         <!-- Spring JDBC（VectorStore 初始化需要） -->

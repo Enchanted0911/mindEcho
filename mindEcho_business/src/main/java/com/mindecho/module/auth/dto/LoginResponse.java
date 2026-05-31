@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 /**
  * 登录响应 DTO
  */
@@ -26,7 +28,7 @@ public class LoginResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class UserInfoDTO {
-        private String id;
+        private UUID id;
         private String nickname;
         private String avatar;
         /**
@@ -45,6 +47,22 @@ public class LoginResponse {
         private Double birthLng;
         /** 出生时间 yyyy-MM-dd HH:mm */
         private String birthTime;
+
+        // ── 和盘：最近一次对方出生信息（前端回填用） ────────────────────
+        /** 最近一次和盘对方昵称 */
+        private String synastryPartnerName;
+        /** 最近一次和盘对方出生城市 */
+        private String synastryPartnerCity;
+        /** 最近一次和盘对方出生地纬度 */
+        private Double synastryPartnerLat;
+        /** 最近一次和盘对方出生地经度 */
+        private Double synastryPartnerLng;
+        /** 最近一次和盘对方出生时间 yyyy-MM-dd HH:mm */
+        private String synastryPartnerTime;
+
+        // ── 流运：最近一次查询的目标日期 ────────────────────────────────
+        /** 最近一次流运查询的目标日期 yyyy-MM-dd */
+        private String transitTargetDate;
     }
 }
 

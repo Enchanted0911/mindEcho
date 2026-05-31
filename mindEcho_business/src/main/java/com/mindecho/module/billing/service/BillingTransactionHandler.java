@@ -11,11 +11,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 /**
  * 计费事务处理器
- *
- * <p>将需要事务的计费操作独立到此组件，避免 BillingService 出现 @Lazy self 自引用。
- * BillingService 的 @Async 方法注入此组件，直接调用事务方法即可让代理生效。
  */
 @Slf4j
 @Component
@@ -27,11 +26,8 @@ public class BillingTransactionHandler {
     private final BillingConfig billingConfig;
     private final ModelBillingConfig modelBillingConfig;
 
-    /**
-     * 结算积分（事务）
-     */
     @Transactional(rollbackFor = Exception.class)
-    public void doSettle(String usageRecordId, String userId,
+    public void doSettle(UUID usageRecordId, UUID userId,
                          int promptTokens, int completionTokens,
                          String defaultModelName) {
         AiUsageRecord usageRec = usageRecordMapper.selectById(usageRecordId);
@@ -71,11 +67,8 @@ public class BillingTransactionHandler {
                 userId, usageRecordId, promptTokens, completionTokens, actualPoints);
     }
 
-    /**
-     * 退回预扣积分（事务）
-     */
     @Transactional(rollbackFor = Exception.class)
-    public void doFailAndRefund(String usageRecordId, String userId) {
+    public void doFailAndRefund(UUID usageRecordId, UUID userId) {
         AiUsageRecord usageRec = usageRecordMapper.selectById(usageRecordId);
         if (usageRec == null || UsageStatusEnum.REFUNDED.getCode().equals(usageRec.getStatus())) {
             return;

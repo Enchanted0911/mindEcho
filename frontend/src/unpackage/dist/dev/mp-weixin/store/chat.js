@@ -83,16 +83,14 @@ const useChatStore = common_vendor.defineStore("chat", () => {
     return msgPage.value < msgTotalPages.value;
   }
   function replaceTrailingMessages(newMsgs, newPage, newTotalPages) {
-    var _a;
     if (newMsgs.length === 0)
       return;
-    const firstRealId = (_a = newMsgs[0]) == null ? void 0 : _a.id;
-    const cutIdx = messages.value.findIndex(
-      (m) => m.id === firstRealId || !m.id.startsWith("user_") && !m.id.startsWith("ai_") && !m.id.startsWith("ai_edit_")
-    );
+    const tempPrefixes = ["user_", "ai_", "ai_edit_"];
+    const isTempId = (id) => tempPrefixes.some((p) => id.startsWith(p));
+    const cutIdx = messages.value.findIndex((m) => isTempId(m.id));
     const olderMsgs = cutIdx > 0 ? messages.value.slice(0, cutIdx) : [];
-    const existingIds = new Set(newMsgs.map((m) => m.id));
-    const deduped = olderMsgs.filter((m) => !existingIds.has(m.id));
+    const newIds = new Set(newMsgs.map((m) => m.id));
+    const deduped = olderMsgs.filter((m) => !newIds.has(m.id));
     messages.value = [...deduped, ...newMsgs];
     msgPage.value = newPage;
     msgTotalPages.value = newTotalPages;

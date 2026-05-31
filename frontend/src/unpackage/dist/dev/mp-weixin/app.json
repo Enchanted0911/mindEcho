@@ -11,16 +11,16 @@
     "pages/vip/index"
   ],
   "window": {
-    "navigationBarTextStyle": "white",
+    "navigationBarTextStyle": "black",
     "navigationBarTitleText": "心屿",
-    "navigationBarBackgroundColor": "#0f0f1a",
-    "backgroundColor": "#0f0f1a"
+    "navigationBarBackgroundColor": "#f5f2ff",
+    "backgroundColor": "#f5f2ff"
   },
   "tabBar": {
-    "color": "#666",
-    "selectedColor": "#b89ee8",
-    "backgroundColor": "#13131f",
-    "borderStyle": "black",
+    "color": "#b0a8cc",
+    "selectedColor": "#9b87d1",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
     "list": [
       {
         "pagePath": "pages/chat/index",

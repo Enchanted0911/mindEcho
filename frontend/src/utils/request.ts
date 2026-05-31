@@ -23,6 +23,16 @@ function getToken(): string {
   return uni.getStorageSync('token') || ''
 }
 
+/** 携带业务错误码的自定义错误类 */
+export class ApiError extends Error {
+  code: number
+  constructor(message: string, code: number) {
+    super(message)
+    this.code = code
+    this.name = 'ApiError'
+  }
+}
+
 export function request<T = any>(options: RequestOptions): Promise<T> {
   return new Promise((resolve, reject) => {
     const token = getToken()
@@ -55,19 +65,23 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
             uni.removeStorageSync('userInfo')
             uni.reLaunch({ url: '/pages/login/index' })
           }
-          reject(new Error('未授权，请重新登录'))
+          reject(new ApiError('未授权，请重新登录', 2001))
           return
         }
 
         if (response.code === 0) {
           resolve(response.data)
         } else {
-          uni.showToast({
-            title: response.message || '请求失败',
-            icon: 'none',
-            duration: 2000
-          })
-          reject(new Error(response.message))
+          // 积分不足（6001）等需要特殊处理的错误，不弹 toast，由调用方处理
+          const silentCodes = new Set([6001, 7001, 7002, 7003, 7004, 7005])
+          if (!silentCodes.has(response.code)) {
+            uni.showToast({
+              title: response.message || '请求失败',
+              icon: 'none',
+              duration: 2000
+            })
+          }
+          reject(new ApiError(response.message || '请求失败', response.code))
         }
       },
       fail: (err) => {

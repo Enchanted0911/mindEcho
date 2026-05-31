@@ -3,218 +3,387 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #0f0f1a;
+  background: #0d0b1a;
 }
+
+/* ── 顶部栏 ── */
 .diary-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 100rpx 32rpx 24rpx;
-  background: rgba(15, 15, 26, 0.95);
+  padding: 96rpx 28rpx 20rpx;
+  background: rgba(15, 12, 28, 0.95);
+  -webkit-backdrop-filter: blur(20rpx);
+          backdrop-filter: blur(20rpx);
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+.header-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
 }
 .header-title {
   font-size: 40rpx;
-  color: #e8d5ff;
-  font-weight: bold;
+  color: rgba(230, 225, 255, 0.95);
+  font-weight: 700;
+}
+.header-subtitle {
+  font-size: 22rpx;
+  color: rgba(180, 170, 210, 0.45);
 }
 .add-btn {
-  background: linear-gradient(135deg, #b89ee8, #8b6fd1);
-  color: white;
-  padding: 16rpx 32rpx;
-  border-radius: 40rpx;
-  font-size: 28rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  background: linear-gradient(135deg, #7c4dff, #5c35cc);
+  border-radius: 16rpx;
+  padding: 14rpx 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(100, 60, 220, 0.35);
 }
+.add-btn-icon {
+  font-size: 28rpx;
+  color: white;
+  font-weight: 300;
+  line-height: 1;
+}
+.add-btn-text {
+  font-size: 26rpx;
+  color: white;
+  font-weight: 500;
+}
+
+/* ── 列表 ── */
 .diary-list {
   flex: 1;
-  padding: 24rpx;
+  padding: 24rpx 24rpx 0;
 }
-.loading-tip, .empty-tip {
+
+/* ── 状态 ── */
+.state-tip {
+  padding: 80rpx 0;
+  text-align: center;
+}
+.state-text { font-size: 26rpx; color: rgba(180, 170, 210, 0.4);
+}
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 120rpx 0;
+  padding: 100rpx 40rpx;
   gap: 16rpx;
 }
-.empty-emoji { font-size: 80rpx;
+.empty-icon-wrap {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 28rpx;
+  background: rgba(120, 80, 200, 0.12);
+  border: 1rpx solid rgba(150, 100, 250, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8rpx;
 }
-.empty-text { font-size: 34rpx; color: #e8d5ff;
+.empty-icon { font-size: 48rpx;
 }
-.empty-desc { font-size: 26rpx; color: #5a5070; text-align: center;
+.empty-title { font-size: 32rpx; color: rgba(220, 215, 245, 0.85); font-weight: 600;
 }
+.empty-desc { font-size: 25rpx; color: rgba(180, 170, 210, 0.5); text-align: center; line-height: 1.6;
+}
+.empty-action {
+  margin-top: 8rpx;
+  background: rgba(120, 80, 200, 0.15);
+  border: 1rpx solid rgba(150, 100, 250, 0.3);
+  border-radius: 20rpx;
+  padding: 14rpx 32rpx;
+}
+.empty-action-text { font-size: 26rpx; color: rgba(160, 120, 240, 0.9);
+}
+
+/* ── 日记卡片 ── */
 .diary-card {
+  display: flex;
+  align-items: stretch;
   background: rgba(255, 255, 255, 0.04);
-  border: 1rpx solid rgba(184, 158, 232, 0.1);
-  border-radius: 24rpx;
-  padding: 28rpx;
-  margin-bottom: 20rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.07);
+  border-radius: 20rpx;
+  margin-bottom: 16rpx;
+  overflow: hidden;
 }
-.diary-card-header {
+.emotion-bar {
+  width: 5rpx;
+  flex-shrink: 0;
+  border-radius: 0;
+  opacity: 0.7;
+}
+.diary-card-body {
+  flex: 1;
+  padding: 22rpx 22rpx 22rpx 18rpx;
+}
+.diary-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16rpx;
+  margin-bottom: 12rpx;
 }
-.diary-date { font-size: 28rpx; color: #b89ee8; font-weight: 600;
+.diary-meta {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
-.diary-weather { font-size: 26rpx; color: #7a6b9a; margin-left: 12rpx;
+.diary-date { font-size: 26rpx; color: rgba(180, 150, 240, 0.85); font-weight: 600;
+}
+.diary-weather { font-size: 22rpx; color: rgba(180, 170, 210, 0.45);
 }
 .emotion-badge {
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  background: rgba(184, 158, 232, 0.12);
-  padding: 8rpx 20rpx;
-  border-radius: 30rpx;
+  gap: 6rpx;
+  border: 1rpx solid;
+  border-radius: 20rpx;
+  padding: 5rpx 14rpx;
 }
-.emotion-label { font-size: 24rpx; color: #b89ee8;
+.emotion-emoji { font-size: 22rpx;
 }
-.diary-preview { font-size: 28rpx; color: #9a8aaa; line-height: 1.6;
+.emotion-label { font-size: 21rpx; font-weight: 500;
 }
-.ai-summary-preview {
+.diary-preview {
+  font-size: 26rpx;
+  color: rgba(200, 195, 225, 0.7);
+  line-height: 1.65;
+  display: block;
+}
+.ai-preview {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  margin-top: 16rpx;
-  background: rgba(184, 158, 232, 0.06);
-  padding: 12rpx 16rpx;
-  border-radius: 12rpx;
+  gap: 10rpx;
+  margin-top: 12rpx;
+  background: rgba(120, 80, 200, 0.08);
+  border: 1rpx solid rgba(150, 100, 250, 0.15);
+  border-radius: 10rpx;
+  padding: 8rpx 12rpx;
 }
-.ai-badge { font-size: 24rpx; color: #b89ee8; white-space: nowrap;
+.ai-preview-badge {
+  font-size: 18rpx;
+  color: rgba(160, 120, 240, 0.8);
+  background: rgba(120, 80, 200, 0.2);
+  border-radius: 6rpx;
+  padding: 3rpx 8rpx;
+  font-weight: 600;
+  flex-shrink: 0;
 }
-.ai-summary-text { font-size: 24rpx; color: #7a6b9a; flex: 1;
+.ai-preview-text {
+  font-size: 21rpx;
+  color: rgba(180, 170, 210, 0.6);
+  flex: 1;
 }
 
-/* 编辑器 */
-.editor-overlay, .detail-overlay {
+/* ── 弹层通用 ── */
+.sheet-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.6);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(10rpx);
+          backdrop-filter: blur(10rpx);
   display: flex;
   align-items: flex-end;
   z-index: 100;
 }
-.editor-panel, .detail-panel {
-  background: #1a1a2e;
-  border-top-left-radius: 40rpx;
-  border-top-right-radius: 40rpx;
-  padding: 40rpx 32rpx 80rpx;
+.sheet-panel {
+  background: #130e24;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.08);
+  border-top-left-radius: 36rpx;
+  border-top-right-radius: 36rpx;
+  padding: 16rpx 28rpx 80rpx;
   width: 100%;
-  max-height: 85vh;
+  max-height: 88vh;
   overflow-y: auto;
+  box-shadow: 0 -8rpx 40rpx rgba(0, 0, 0, 0.4);
 }
-.editor-header, .detail-header {
+.detail-panel { padding-bottom: 60rpx;
+}
+.sheet-handle {
+  width: 60rpx;
+  height: 6rpx;
+  border-radius: 3rpx;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 auto 24rpx;
+}
+.sheet-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 32rpx;
+  justify-content: space-between;
+  margin-bottom: 28rpx;
 }
-.editor-title, .detail-date-emotion {
+.sheet-title {
+  font-size: 34rpx;
+  color: rgba(230, 225, 255, 0.95);
+  font-weight: 700;
 }
-.editor-title {
-  font-size: 36rpx;
-  color: #e8d5ff;
-  font-weight: 600;
+.close-btn {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.editor-close, .detail-panel text:last-child {
-  font-size: 36rpx;
-  color: #7a6b9a;
+.close-icon { font-size: 24rpx; color: rgba(180, 170, 210, 0.5);
 }
 .section-label {
-  font-size: 26rpx;
-  color: #7a6b9a;
+  font-size: 22rpx;
+  color: rgba(180, 160, 220, 0.5);
   display: block;
-  margin: 24rpx 0 16rpx;
+  margin: 22rpx 0 14rpx;
+  letter-spacing: 1rpx;
 }
-.emotion-scroll { margin-bottom: 8rpx;
+
+/* 情绪选择 */
+.emotion-scroll { margin-bottom: 4rpx;
 }
 .emotion-row {
   display: flex;
-  gap: 16rpx;
+  gap: 12rpx;
   white-space: nowrap;
-  padding-bottom: 8rpx;
+  padding-bottom: 4rpx;
 }
 .emotion-pill {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 8rpx;
-  background: rgba(255,255,255,0.05);
-  border: 1rpx solid rgba(184,158,232,0.1);
-  padding: 16rpx 20rpx;
+  gap: 7rpx;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  padding: 14rpx 18rpx;
   border-radius: 16rpx;
   flex-shrink: 0;
 }
-.emotion-selected {
-  background: rgba(184,158,232,0.2);
-  border-color: #b89ee8;
+.emotion-pill-emoji { font-size: 30rpx;
 }
-.emotion-pill-emoji { font-size: 36rpx;
+.emotion-pill-label { font-size: 21rpx; color: rgba(180, 170, 210, 0.6);
 }
-.emotion-pill-label { font-size: 22rpx; color: #b89ee8;
-}
+
+/* 天气选择 */
 .weather-row {
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
-  margin-bottom: 8rpx;
+  margin-bottom: 4rpx;
 }
 .weather-pill {
-  background: rgba(255,255,255,0.05);
-  border: 1rpx solid rgba(184,158,232,0.1);
-  padding: 12rpx 24rpx;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  padding: 11rpx 22rpx;
   border-radius: 30rpx;
-  font-size: 26rpx;
-  color: #9a8aaa;
 }
 .weather-selected {
-  background: rgba(184,158,232,0.2);
-  border-color: #b89ee8;
-  color: #e8d5ff;
+  background: rgba(120, 80, 200, 0.15);
+  border-color: rgba(150, 100, 250, 0.4);
 }
+.weather-text { font-size: 24rpx; color: rgba(200, 190, 230, 0.75);
+}
+
+/* 文本区域 */
 .diary-textarea {
   width: 100%;
   min-height: 160rpx;
-  background: rgba(255,255,255,0.04);
-  border: 1rpx solid rgba(184,158,232,0.12);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
   border-radius: 16rpx;
-  padding: 20rpx;
-  font-size: 28rpx;
-  color: #e8d5ff;
-  line-height: 1.6;
-  margin-top: 8rpx;
+  padding: 18rpx 20rpx;
+  font-size: 27rpx;
+  color: rgba(225, 218, 245, 0.9);
+  line-height: 1.7;
+  margin-top: 4rpx;
+  box-sizing: border-box;
 }
+
+/* 保存按钮 */
 .save-btn {
   width: 100%;
-  height: 96rpx;
-  background: linear-gradient(135deg, #b89ee8, #8b6fd1);
+  height: 92rpx;
+  background: linear-gradient(135deg, #7c4dff, #5c35cc);
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 28rpx;
+  box-shadow: 0 6rpx 24rpx rgba(100, 60, 220, 0.35);
+}
+.save-btn.btn-loading { opacity: 0.65;
+}
+.save-btn-text {
+  font-size: 30rpx;
   color: white;
-  font-size: 32rpx;
-  border-radius: 48rpx;
-  margin-top: 32rpx;
-  border: none;
+  font-weight: 600;
+  letter-spacing: 2rpx;
 }
 
 /* 详情 */
-.detail-date { font-size: 32rpx; color: #b89ee8; font-weight: 600;
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
 }
-.detail-emotion { font-size: 28rpx; color: #9a8aaa; margin-left: 16rpx;
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
 }
-.detail-content { max-height: 60vh;
+.detail-date { font-size: 30rpx; color: rgba(180, 150, 240, 0.9); font-weight: 600;
 }
-.detail-text { font-size: 30rpx; color: #c4a8f0; line-height: 1.8; white-space: pre-wrap;
+.detail-emotion-badge { font-size: 26rpx; color: rgba(200, 190, 230, 0.65);
 }
-.ai-section { margin-top: 40rpx; padding-top: 32rpx; border-top: 1rpx solid rgba(255,255,255,0.08);
+.detail-scroll { max-height: 60vh;
 }
-.ai-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx;
+.detail-text {
+  font-size: 28rpx;
+  color: rgba(220, 215, 240, 0.88);
+  line-height: 2;
+  white-space: pre-wrap;
+  display: block;
+  margin-bottom: 32rpx;
 }
-.ai-section-title { font-size: 30rpx; color: #b89ee8; font-weight: 600;
+
+/* AI 总结区域 */
+.ai-section {
+  border-top: 1rpx solid rgba(255, 255, 255, 0.07);
+  padding-top: 24rpx;
 }
-.get-summary-btn { font-size: 26rpx; color: #8b6fd1; background: rgba(139,111,209,0.1); padding: 10rpx 24rpx; border-radius: 30rpx;
+.ai-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
 }
-.ai-summary-full { font-size: 28rpx; color: #c4a8f0; line-height: 1.8;
+.ai-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
 }
-.ai-summary-placeholder { font-size: 26rpx; color: #5a5070;
+.ai-dot {
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background: rgba(160, 120, 240, 0.8);
+  box-shadow: 0 0 8rpx rgba(160, 120, 240, 0.6);
+}
+.ai-section-title { font-size: 26rpx; color: rgba(180, 150, 240, 0.85); font-weight: 600;
+}
+.get-summary-btn {
+  background: rgba(120, 80, 200, 0.15);
+  border: 1rpx solid rgba(150, 100, 250, 0.3);
+  border-radius: 16rpx;
+  padding: 10rpx 22rpx;
+}
+.get-summary-text { font-size: 24rpx; color: rgba(160, 120, 240, 0.9);
+}
+.ai-summary-text {
+  font-size: 26rpx;
+  color: rgba(210, 200, 235, 0.85);
+  line-height: 1.85;
+}
+.ai-placeholder { font-size: 24rpx; color: rgba(180, 170, 210, 0.35); line-height: 1.6;
 }

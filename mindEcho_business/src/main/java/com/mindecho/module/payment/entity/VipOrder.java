@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 会员订单实体
@@ -13,12 +14,12 @@ import java.time.OffsetDateTime;
 @TableName("vip_order")
 public class VipOrder {
 
-    @TableId(type = IdType.ASSIGN_UUID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private UUID id;
 
     /** 用户ID */
     @TableField("user_id")
-    private String userId;
+    private UUID userId;
 
     /** 订单号 */
     @TableField("order_no")

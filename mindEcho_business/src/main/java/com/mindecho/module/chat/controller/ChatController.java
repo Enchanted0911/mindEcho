@@ -15,6 +15,8 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.UUID;
+
 /**
  * 聊天 Controller
  */
@@ -32,7 +34,7 @@ public class ChatController {
      */
     @PostMapping(value = "/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter sendMessage(@Valid @RequestBody SendMessageRequest request) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         log.info("Chat send: userId={}, message={}", userId, request.getMessage());
         return chatService.sendMessage(userId, request);
     }
@@ -45,7 +47,7 @@ public class ChatController {
     public Result<IPage<ChatSessionDTO>> getSessionList(
             @RequestParam(name = "page", defaultValue = "1") Integer page,
             @RequestParam(name = "size", defaultValue = "20") Integer size) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(chatService.getSessionList(userId, page, size));
     }
 
@@ -55,10 +57,10 @@ public class ChatController {
      */
     @GetMapping("/sessions/{sessionId}/messages")
     public Result<IPage<ChatMessageDTO>> getMessageList(
-            @PathVariable("sessionId") String sessionId,
+            @PathVariable("sessionId") UUID sessionId,
             @RequestParam(name = "page", defaultValue = "1") Integer page,
             @RequestParam(name = "size", defaultValue = "20") Integer size) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         return Result.success(chatService.getMessageList(userId, sessionId, page, size));
     }
 
@@ -68,7 +70,7 @@ public class ChatController {
      */
     @PostMapping("/stop")
     public Result<Void> stopStreaming() {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         log.info("Stop streaming: userId={}", userId);
         chatService.stopStreaming(userId);
         return Result.success();
@@ -81,7 +83,7 @@ public class ChatController {
      */
     @PostMapping(value = "/edit", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter editMessage(@Valid @RequestBody EditMessageRequest request) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         log.info("Edit message: userId={}, messageId={}", userId, request.getMessageId());
         return chatService.editMessage(userId, request);
     }
@@ -91,8 +93,8 @@ public class ChatController {
      * DELETE /api/chat/sessions/{sessionId}
      */
     @DeleteMapping("/sessions/{sessionId}")
-    public Result<Void> deleteSession(@PathVariable("sessionId") String sessionId) {
-        String userId = UserContext.getUserId();
+    public Result<Void> deleteSession(@PathVariable("sessionId") UUID sessionId) {
+        UUID userId = UserContext.getUserId();
         chatService.deleteSession(userId, sessionId);
         return Result.success();
     }

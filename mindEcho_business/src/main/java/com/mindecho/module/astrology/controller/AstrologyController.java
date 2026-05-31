@@ -5,27 +5,35 @@ import com.mindecho.common.util.UserContext;
 import com.mindecho.module.astrology.dto.*;
 import com.mindecho.module.astrology.service.AstrologyAiService;
 import com.mindecho.module.astrology.service.AstrologyGatewayService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 /**
  * 占星模块 REST 接口
  *
- * <p>接口清单（按 PRD §4）：
+ * <p>接口清单：
  * <pre>
- * POST /api/astrology/natal              单星盘计算（转发 Python）
- * POST /api/astrology/natal/interpret    单盘 AI 解读
- * POST /api/astrology/synastry           和盘计算（转发 Python）
- * POST /api/astrology/synastry/interpret 和盘 AI 解读
- * POST /api/astrology/transit            流运计算（转发 Python）
- * POST /api/astrology/transit/interpret  流运 AI 解读
+ * POST /api/astrology/natal              单星盘计算（从 user 表读取出生信息，转发 Python）
+ * POST /api/astrology/natal/interpret    单盘 AI 解读（chart 从 DB 读取，需先计算本命盘）
+ * POST /api/astrology/synastry           和盘计算（从 user 表读取自己和对方出生信息）
+ * POST /api/astrology/synastry/interpret 和盘 AI 解读（只传 relationshipType，chart 从 DB 读取）
+ * POST /api/astrology/transit            流运计算（从 user 表读取出生信息，出生信息由后端读取）
+ * POST /api/astrology/transit/interpret  流运 AI 解读（只传 windowDays，chart 从 DB 读取）
  * GET  /api/astrology/natal/check        查询当前用户是否有缓存本命盘
  * DELETE /api/astrology/natal/cache      强制清除并刷新本命盘缓存
  * </pre>
  *
  * <p>认证：所有接口均需 JWT Token（由 {@code JwtInterceptor} 拦截验证）。
+ *
+ * <p>前置条件说明：
+ * <ul>
+ *   <li>计算接口前置条件：user 表中已有对应的出生信息（birth_time / birth_city）</li>
+ *   <li>和盘计算额外前置条件：user 表中已有对方出生信息（synastry_partner_*）</li>
+ *   <li>解读接口前置条件：user 表中已有对应的星盘数据（natal_chart_data / synastry_chart_data / synastry_chart_summary）</li>
+ * </ul>
  */
 @Slf4j
 @RestController
@@ -41,34 +49,40 @@ public class AstrologyController {
     /**
      * 计算本命盘（含缓存）
      *
-     * <p>第一次调用转发 Python 计算，结果永久缓存到 Redis；
-     * 后续调用直接返回缓存，无需重新计算。
+     * <p>无需传出生信息，后端从 user 表读取；
+     * 若用户未设置出生信息，返回 7001 错误，前端应引导用户先设置出生信息。
+     * 计算结果同时持久化到 user 表的 natal_chart_data / natal_chart_summary 字段。
      *
      * POST /api/astrology/natal
      */
     @PostMapping("/natal")
-    public Result<NatalChartResponseDTO> calculateNatal(@Valid @RequestBody NatalRequestDTO request) {
-        String userId = UserContext.getUserId();
-        log.info("Calculate natal chart: userId={}, city={}", userId, request.getBirthInfo().getCity());
-        NatalChartResponseDTO result = gatewayService.getNatalChart(userId, request);
+    public Result<NatalChartResponseDTO> calculateNatal() {
+        UUID userId = UserContext.getUserId();
+        log.info("Calculate natal chart: userId={}", userId);
+        NatalChartResponseDTO result = gatewayService.getNatalChart(userId);
+        log.info("Calculate natal chart result: userId={}, result={}", userId, result);
         return Result.success(result);
     }
 
     /**
      * 单盘 AI 解读
      *
-     * <p>请求体中的 {@code chart} 字段可直接使用 {@code /api/astrology/natal} 返回的 {@code chart} 字段，
-     * 无需重新提交出生信息。
+     * <p>chart 数据由后端从 user 表 natal_chart_data 字段读取，前端无需传 chart。
+     * 前置条件：用户已计算过本命盘（natal_chart_data 不为空），否则返回 7005 错误。
      *
      * POST /api/astrology/natal/interpret
      */
     @PostMapping("/natal/interpret")
     public Result<AstrologyInterpretResponseDTO> interpretNatal(
-            @Valid @RequestBody AstrologyInterpretRequestDTO request) {
-        String userId = UserContext.getUserId();
+            @RequestBody(required = false) AstrologyInterpretRequestDTO request) {
+        UUID userId = UserContext.getUserId();
+        if (request == null) {
+            request = new AstrologyInterpretRequestDTO();
+        }
         log.info("Interpret natal chart: userId={}, focus={}", userId, request.getFocus());
         request.setInterpretType("NATAL");
         AstrologyInterpretResponseDTO result = aiService.interpretNatal(userId, request);
+        log.info("Interpret natal chart result: userId={}, result={}", userId, result);
         return Result.success(result);
     }
 
@@ -79,23 +93,24 @@ public class AstrologyController {
      */
     @GetMapping("/natal/check")
     public Result<Boolean> checkNatalChart() {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         boolean hasChart = gatewayService.hasNatalChart(userId);
         return Result.success(hasChart);
     }
 
     /**
-     * 强制刷新本命盘（清除缓存后重新计算）
+     * 强制刷新本命盘（清除 Redis 缓存和 DB 缓存后重新计算）
      *
-     * <p>适用场景：用户发现出生信息录入有误，需要重新计算。
+     * <p>适用场景：用户修改出生信息后，后端已自动清空缓存；
+     * 此接口用于手动强制刷新。
      *
      * DELETE /api/astrology/natal/cache
      */
     @DeleteMapping("/natal/cache")
-    public Result<NatalChartResponseDTO> refreshNatalChart(@Valid @RequestBody NatalRequestDTO request) {
-        String userId = UserContext.getUserId();
+    public Result<NatalChartResponseDTO> refreshNatalChart() {
+        UUID userId = UserContext.getUserId();
         log.info("Refresh natal chart: userId={}", userId);
-        NatalChartResponseDTO result = gatewayService.refreshNatalChart(userId, request);
+        NatalChartResponseDTO result = gatewayService.refreshNatalChart(userId);
         return Result.success("本命盘已重新计算", result);
     }
 
@@ -104,30 +119,35 @@ public class AstrologyController {
     /**
      * 计算和盘（含 30 天缓存）
      *
+     * <p>无需传任何参数，后端从 user 表读取自己的出生信息和上次保存的对方出生信息。
+     * 若 user 表中没有对方出生信息，返回 7002 错误，前端应引导用户先设置对方信息。
+     *
      * POST /api/astrology/synastry
      */
     @PostMapping("/synastry")
-    public Result<SynastryResponseDTO> calculateSynastry(@Valid @RequestBody SynastryRequestDTO request) {
-        String userId = UserContext.getUserId();
-        log.info("Calculate synastry: userId={}, partner={}", userId, request.getPartnerName());
-        SynastryResponseDTO result = gatewayService.getSynastryChart(userId, request);
+    public Result<SynastryResponseDTO> calculateSynastry() {
+        UUID userId = UserContext.getUserId();
+        log.info("Calculate synastry: userId={}", userId);
+        SynastryResponseDTO result = gatewayService.getSynastryChart(userId);
         return Result.success(result);
     }
 
     /**
      * 和盘 AI 解读
      *
-     * <p>请求体中 {@code chart} 使用 {@code /api/astrology/synastry} 返回的 {@code chart} 字段；
-     * {@code extraContext} 格式：{@code "{partnerName}|{relationshipType}"}，如 {@code "小明|romantic"}
+     * <p>chart 数据由后端从 user 表 synastry_chart_data 字段读取，前端只需传 relationshipType。
+     * 前置条件：用户已计算过和盘（synastry_chart_data 不为空），否则返回 7003 错误。
      *
      * POST /api/astrology/synastry/interpret
      */
     @PostMapping("/synastry/interpret")
     public Result<AstrologyInterpretResponseDTO> interpretSynastry(
-            @Valid @RequestBody AstrologyInterpretRequestDTO request) {
-        String userId = UserContext.getUserId();
-        log.info("Interpret synastry chart: userId={}, focus={}", userId, request.getFocus());
-        request.setInterpretType("SYNASTRY");
+            @RequestBody(required = false) SynastryInterpretRequestDTO request) {
+        UUID userId = UserContext.getUserId();
+        if (request == null) {
+            request = new SynastryInterpretRequestDTO();
+        }
+        log.info("Interpret synastry chart: userId={}, relationshipType={}", userId, request.getRelationshipType());
         AstrologyInterpretResponseDTO result = aiService.interpretSynastry(userId, request);
         return Result.success(result);
     }
@@ -137,11 +157,16 @@ public class AstrologyController {
     /**
      * 计算流运（含 24 小时缓存）
      *
+     * <p>出生信息从 user 表读取，前端只需传 targetDate（可选）和 windowDays（可选）。
+     *
      * POST /api/astrology/transit
      */
     @PostMapping("/transit")
-    public Result<TransitResponseDTO> calculateTransit(@Valid @RequestBody TransitRequestDTO request) {
-        String userId = UserContext.getUserId();
+    public Result<TransitResponseDTO> calculateTransit(@RequestBody(required = false) TransitRequestDTO request) {
+        UUID userId = UserContext.getUserId();
+        if (request == null) {
+            request = new TransitRequestDTO();
+        }
         log.info("Calculate transit: userId={}, targetDate={}", userId, request.getTargetDate());
         TransitResponseDTO result = gatewayService.getTransitChart(userId, request);
         return Result.success(result);
@@ -150,17 +175,19 @@ public class AstrologyController {
     /**
      * 流运 AI 解读
      *
-     * <p>请求体中 {@code chart} 使用 {@code /api/astrology/transit} 返回的 {@code chart} 字段；
-     * {@code extraContext} 填入流运查询日期，如 {@code "2026-05-29"}
+     * <p>chart 数据由后端从 user 表读取，前端只需传 windowDays（时间窗口）。
+     * 前置条件：用户已计算过流运（synastry_chart_summary 中有流运数据），否则返回 7004 错误。
      *
      * POST /api/astrology/transit/interpret
      */
     @PostMapping("/transit/interpret")
     public Result<AstrologyInterpretResponseDTO> interpretTransit(
-            @Valid @RequestBody AstrologyInterpretRequestDTO request) {
-        String userId = UserContext.getUserId();
-        log.info("Interpret transit chart: userId={}, focus={}", userId, request.getFocus());
-        request.setInterpretType("TRANSIT");
+            @RequestBody(required = false) TransitInterpretRequestDTO request) {
+        UUID userId = UserContext.getUserId();
+        if (request == null) {
+            request = new TransitInterpretRequestDTO();
+        }
+        log.info("Interpret transit chart: userId={}, windowDays={}", userId, request.getWindowDays());
         AstrologyInterpretResponseDTO result = aiService.interpretTransit(userId, request);
         return Result.success(result);
     }

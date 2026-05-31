@@ -36,7 +36,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         const result = await api_diary.getDiaryList();
         diaryStore.setDiaryList(result.records || []);
       } catch (e) {
-        common_vendor.index.__f__("error", "at pages/diary/index.vue:44", e);
+        common_vendor.index.__f__("error", "at pages/diary/index.vue:43", e);
       } finally {
         isLoading.value = false;
       }
@@ -100,49 +100,75 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       }
       return String(dateVal);
     }
+    function getEmotionColor(code) {
+      const colorMap = {
+        happiness: "#f0b429",
+        neutral: "#9b87d1",
+        sadness: "#4a9eff",
+        anxiety: "#ff8c42",
+        anger: "#ff5252",
+        loneliness: "#7c86c8",
+        stress: "#e8637a",
+        fear: "#b06adf"
+      };
+      return colorMap[code] || "#9b87d1";
+    }
     return (_ctx, _cache) => {
       return common_vendor.e({
-        a: common_vendor.o(openEditor, "94"),
+        a: common_vendor.o(openEditor, "74"),
         b: isLoading.value && common_vendor.unref(diaryStore).diaryList.length === 0
-      }, isLoading.value && common_vendor.unref(diaryStore).diaryList.length === 0 ? {} : common_vendor.unref(diaryStore).diaryList.length === 0 ? {} : {}, {
+      }, isLoading.value && common_vendor.unref(diaryStore).diaryList.length === 0 ? {} : common_vendor.unref(diaryStore).diaryList.length === 0 ? {
+        d: common_vendor.o(openEditor, "c2")
+      } : {}, {
         c: common_vendor.unref(diaryStore).diaryList.length === 0,
-        d: common_vendor.f(common_vendor.unref(diaryStore).diaryList, (diary, k0, i0) => {
+        e: common_vendor.f(common_vendor.unref(diaryStore).diaryList, (diary, k0, i0) => {
           return common_vendor.e({
-            a: common_vendor.t(formatDate(diary.diaryDate)),
-            b: diary.weather
+            a: diary.emotion ? getEmotionColor(diary.emotion) : "rgba(155, 135, 209, 0.4)",
+            b: common_vendor.t(formatDate(diary.diaryDate)),
+            c: diary.weather
           }, diary.weather ? {
-            c: common_vendor.t(diary.weather)
+            d: common_vendor.t(diary.weather)
           } : {}, {
-            d: diary.emotion
+            e: diary.emotion
           }, diary.emotion ? {
-            e: common_vendor.t(common_vendor.unref(utils_emotion.getEmotionInfo)(diary.emotion).emoji),
-            f: common_vendor.t(common_vendor.unref(utils_emotion.getEmotionInfo)(diary.emotion).label)
+            f: common_vendor.t(common_vendor.unref(utils_emotion.getEmotionInfo)(diary.emotion).emoji),
+            g: common_vendor.t(common_vendor.unref(utils_emotion.getEmotionInfo)(diary.emotion).label),
+            h: getEmotionColor(diary.emotion),
+            i: getEmotionColor(diary.emotion) + "22",
+            j: getEmotionColor(diary.emotion) + "44"
           } : {}, {
-            g: diary.content
+            k: diary.content
           }, diary.content ? {
-            h: common_vendor.t(diary.content)
+            l: common_vendor.t(diary.content)
           } : {}, {
-            i: diary.aiSummary
+            m: diary.aiSummary
           }, diary.aiSummary ? {
-            j: common_vendor.t(diary.aiSummary)
+            n: common_vendor.t(diary.aiSummary)
           } : {}, {
-            k: diary.id,
-            l: common_vendor.o(($event) => openDiaryDetail(diary), diary.id)
+            o: diary.id,
+            p: common_vendor.o(($event) => openDiaryDetail(diary), diary.id)
           });
         }),
-        e: showEditor.value
+        f: showEditor.value
       }, showEditor.value ? {
-        f: common_vendor.o(($event) => showEditor.value = false, "f4"),
-        g: common_vendor.f(EMOTIONS, (e, k0, i0) => {
+        g: common_vendor.o(($event) => showEditor.value = false, "6f"),
+        h: common_vendor.f(EMOTIONS, (e, k0, i0) => {
           return {
             a: common_vendor.t(e.emoji),
             b: common_vendor.t(e.label),
-            c: e.code,
-            d: editEmotion.value === e.code ? 1 : "",
-            e: common_vendor.o(($event) => editEmotion.value = e.code, e.code)
+            c: common_vendor.s(editEmotion.value === e.code ? {
+              color: getEmotionColor(e.code)
+            } : {}),
+            d: e.code,
+            e: editEmotion.value === e.code ? 1 : "",
+            f: common_vendor.s(editEmotion.value === e.code ? {
+              background: getEmotionColor(e.code) + "22",
+              borderColor: getEmotionColor(e.code) + "66"
+            } : {}),
+            g: common_vendor.o(($event) => editEmotion.value = e.code, e.code)
           };
         }),
-        h: common_vendor.f(WEATHERS, (w, k0, i0) => {
+        i: common_vendor.f(WEATHERS, (w, k0, i0) => {
           return {
             a: common_vendor.t(w),
             b: w,
@@ -150,39 +176,41 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
             d: common_vendor.o(($event) => editWeather.value = w, w)
           };
         }),
-        i: editContent.value,
-        j: common_vendor.o(($event) => editContent.value = $event.detail.value, "a2"),
-        k: isLoading.value,
-        l: common_vendor.o(saveDiaryEntry, "45"),
-        m: common_vendor.o(() => {
-        }, "cb"),
-        n: common_vendor.o(($event) => showEditor.value = false, "f2")
+        j: editContent.value,
+        k: common_vendor.o(($event) => editContent.value = $event.detail.value, "61"),
+        l: common_vendor.t(isLoading.value ? "保存中…" : "保存日记"),
+        m: isLoading.value ? 1 : "",
+        n: common_vendor.o(saveDiaryEntry, "d2"),
+        o: common_vendor.o(() => {
+        }, "50"),
+        p: common_vendor.o(($event) => showEditor.value = false, "13")
       } : {}, {
-        o: showDetail.value && selectedDiary.value
+        q: showDetail.value && selectedDiary.value
       }, showDetail.value && selectedDiary.value ? common_vendor.e({
-        p: common_vendor.t(formatDate(selectedDiary.value.diaryDate)),
-        q: selectedDiary.value.emotion
+        r: common_vendor.t(formatDate(selectedDiary.value.diaryDate)),
+        s: selectedDiary.value.emotion
       }, selectedDiary.value.emotion ? {
-        r: common_vendor.t(common_vendor.unref(utils_emotion.getEmotionInfo)(selectedDiary.value.emotion).emoji),
-        s: common_vendor.t(common_vendor.unref(utils_emotion.getEmotionInfo)(selectedDiary.value.emotion).label)
+        t: common_vendor.t(common_vendor.unref(utils_emotion.getEmotionInfo)(selectedDiary.value.emotion).emoji),
+        v: common_vendor.t(common_vendor.unref(utils_emotion.getEmotionInfo)(selectedDiary.value.emotion).label)
       } : {}, {
-        t: common_vendor.o(($event) => showDetail.value = false, "e0"),
-        v: selectedDiary.value.content
+        w: common_vendor.o(($event) => showDetail.value = false, "b7"),
+        x: selectedDiary.value.content
       }, selectedDiary.value.content ? {
-        w: common_vendor.t(selectedDiary.value.content)
+        y: common_vendor.t(selectedDiary.value.content)
       } : {}, {
-        x: !selectedDiary.value.aiSummary
+        z: !selectedDiary.value.aiSummary
       }, !selectedDiary.value.aiSummary ? {
-        y: common_vendor.t(isGettingSummary.value ? "生成中..." : "获取总结"),
-        z: common_vendor.o(fetchAiSummary, "e4")
+        A: common_vendor.t(isGettingSummary.value ? "生成中…" : "获取总结"),
+        B: isGettingSummary.value ? 1 : "",
+        C: common_vendor.o(fetchAiSummary, "e7")
       } : {}, {
-        A: selectedDiary.value.aiSummary
+        D: selectedDiary.value.aiSummary
       }, selectedDiary.value.aiSummary ? {
-        B: common_vendor.t(selectedDiary.value.aiSummary)
+        E: common_vendor.t(selectedDiary.value.aiSummary)
       } : {}, {
-        C: common_vendor.o(() => {
-        }, "91"),
-        D: common_vendor.o(($event) => showDetail.value = false, "c7")
+        F: common_vendor.o(() => {
+        }, "57"),
+        G: common_vendor.o(($event) => showDetail.value = false, "d5")
       }) : {});
     };
   }

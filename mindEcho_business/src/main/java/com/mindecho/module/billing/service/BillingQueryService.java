@@ -16,6 +16,8 @@ import com.mindecho.module.billing.mapper.UserPointAccountMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
+
 /**
  * 积分查询服务（只读，用于账单展示）
  */
@@ -28,10 +30,7 @@ public class BillingQueryService {
     private final AiUsageRecordMapper usageRecordMapper;
     private final PointAccountService pointAccountService;
 
-    /**
-     * 查询用户积分账户信息
-     */
-    public PointAccountDTO getAccountInfo(String userId) {
+    public PointAccountDTO getAccountInfo(UUID userId) {
         UserPointAccount account = pointAccountService.getAccount(userId);
         return PointAccountDTO.builder()
                 .balance(account.getBalance())
@@ -43,10 +42,7 @@ public class BillingQueryService {
                 .build();
     }
 
-    /**
-     * 分页查询积分流水（全部类型）
-     */
-    public IPage<TransactionRecordDTO> getTransactionList(String userId, Integer page, Integer size) {
+    public IPage<TransactionRecordDTO> getTransactionList(UUID userId, Integer page, Integer size) {
         Page<PointTransaction> pageParam = new Page<>(page, size);
         IPage<PointTransaction> txPage = transactionMapper.selectPage(pageParam,
                 new LambdaQueryWrapper<PointTransaction>()
@@ -56,10 +52,7 @@ public class BillingQueryService {
         return txPage.convert(this::toTransactionDTO);
     }
 
-    /**
-     * 分页查询充值流水
-     */
-    public IPage<TransactionRecordDTO> getRechargeList(String userId, Integer page, Integer size) {
+    public IPage<TransactionRecordDTO> getRechargeList(UUID userId, Integer page, Integer size) {
         Page<PointTransaction> pageParam = new Page<>(page, size);
         IPage<PointTransaction> txPage = transactionMapper.selectPage(pageParam,
                 new LambdaQueryWrapper<PointTransaction>()
@@ -70,10 +63,7 @@ public class BillingQueryService {
         return txPage.convert(this::toTransactionDTO);
     }
 
-    /**
-     * 分页查询消费流水（CONSUME 类型）
-     */
-    public IPage<TransactionRecordDTO> getConsumeList(String userId, Integer page, Integer size) {
+    public IPage<TransactionRecordDTO> getConsumeList(UUID userId, Integer page, Integer size) {
         Page<PointTransaction> pageParam = new Page<>(page, size);
         IPage<PointTransaction> txPage = transactionMapper.selectPage(pageParam,
                 new LambdaQueryWrapper<PointTransaction>()
@@ -84,10 +74,7 @@ public class BillingQueryService {
         return txPage.convert(this::toTransactionDTO);
     }
 
-    /**
-     * 分页查询 AI 使用量记录（含消费详情）
-     */
-    public IPage<UsageRecordDTO> getUsageList(String userId, Integer page, Integer size) {
+    public IPage<UsageRecordDTO> getUsageList(UUID userId, Integer page, Integer size) {
         Page<AiUsageRecord> pageParam = new Page<>(page, size);
         IPage<AiUsageRecord> usagePage = usageRecordMapper.selectPage(pageParam,
                 new LambdaQueryWrapper<AiUsageRecord>()
@@ -96,8 +83,6 @@ public class BillingQueryService {
         );
         return usagePage.convert(this::toUsageDTO);
     }
-
-    // ─────────────────────── 转换方法 ───────────────────────
 
     private TransactionRecordDTO toTransactionDTO(PointTransaction tx) {
         return TransactionRecordDTO.builder()

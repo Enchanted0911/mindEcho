@@ -8,10 +8,13 @@ import com.mindecho.common.enums.RiskLevelEnum;
 import com.mindecho.common.enums.RoleEnum;
 import com.mindecho.common.exception.BusinessException;
 import com.mindecho.common.result.ResultCode;
+import com.mindecho.module.astrology.tool.AstrologyTools;
 import com.mindecho.module.auth.entity.User;
 import com.mindecho.module.auth.mapper.UserMapper;
 import com.mindecho.module.billing.entity.AiUsageRecord;
 import com.mindecho.module.billing.service.BillingService;
+import com.mindecho.module.chat.advisor.LongTermMemoryAdvisor;
+import com.mindecho.module.chat.advisor.MindEchoChatMemoryRepository;
 import com.mindecho.module.chat.dto.ChatMessageDTO;
 import com.mindecho.module.chat.dto.ChatSessionDTO;
 import com.mindecho.module.chat.dto.EditMessageRequest;
@@ -21,17 +24,13 @@ import com.mindecho.module.chat.entity.ChatSession;
 import com.mindecho.module.chat.mapper.ChatMessageMapper;
 import com.mindecho.module.chat.mapper.ChatSessionMapper;
 import com.mindecho.module.emotion.service.EmotionService;
-import com.mindecho.module.memory.service.MemoryService;
 import com.mindecho.module.personality.service.PersonalityService;
 import com.mindecho.module.prompt.service.PromptService;
 import com.mindecho.module.risk.service.RiskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -39,15 +38,27 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 聊天服务（核心模块）
+ *
+ * <p>使用 Spring AI Advisor 链实现以下功能：
+ * <ul>
+ *   <li>短期记忆（会话历史）：{@code MessageChatMemoryAdvisor}（在 SpringAiConfig 中配置）</li>
+ *   <li>长期记忆注入：{@code LongTermMemoryAdvisor}（在 SpringAiConfig 中配置）</li>
+ *   <li>记忆提取保存：{@code MemoryExtractionAdvisor}（在 SpringAiConfig 中配置）</li>
+ * </ul>
+ *
+ * <p>每次请求时通过 {@code chatClient.prompt().advisors()} 动态传入以下上下文：
+ * <ul>
+ *   <li>{@code chat_memory_conversation_id}：会话 ID（格式 "session:{sessionId}"）</li>
+ *   <li>{@code mindecho_userId}：用户 ID（供 LongTermMemoryAdvisor 使用）</li>
+ *   <li>{@code mindecho_userMessage}：用户消息原文（供 MemoryExtractionAdvisor 使用）</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -56,32 +67,38 @@ public class ChatService {
 
     private static final String DEFAULT_SESSION_TITLE = "新对话";
 
+    /** 星盘/占星相关关键词（用于渐进式工具披露） */
+    private static final String[] ASTROLOGY_KEYWORDS = {
+            "星盘", "本命盘", "合盘", "和盘", "流运", "占星", "星座",
+            "上升", "月亮", "太阳星座", "天蝎", "白羊", "金牛", "双子", "巨蟹",
+            "狮子", "处女", "天秤", "射手", "摩羯", "水瓶", "双鱼",
+            "行星", "宫位", "相位", "土星", "木星", "火星", "金星", "水星",
+            "天王", "海王", "冥王", "命盘", "运势", "星象"
+    };
+
     private final ChatClient chatClient;
     private final UserMapper userMapper;
     private final ChatSessionMapper chatSessionMapper;
     private final ChatMessageMapper chatMessageMapper;
-    private final PromptService promptService;
     private final RiskService riskService;
     private final EmotionService emotionService;
-    private final MemoryService memoryService;
     private final PersonalityService personalityService;
     private final BillingService billingService;
+    private final PromptService promptService;
+    private final AstrologyTools astrologyTools;
 
     @Value("${mindecho.free-daily-messages:10}")
     private int freeDailyMessages;
 
-    /** 用户当前活跃的 SSE 连接（userId -> emitter） */
-    private final ConcurrentHashMap<String, SseEmitter> activeSseMap = new ConcurrentHashMap<>();
+    /** 用户当前活跃的 SSE 连接 */
+    private final ConcurrentHashMap<UUID, SseEmitter> activeSseMap = new ConcurrentHashMap<>();
 
-    /** 停止标志位（userId -> stopped） */
-    private final ConcurrentHashMap<String, AtomicBoolean> stopFlagMap = new ConcurrentHashMap<>();
+    /** 停止标志位 */
+    private final ConcurrentHashMap<UUID, AtomicBoolean> stopFlagMap = new ConcurrentHashMap<>();
 
     // ─── 公开接口 ─────────────────────────────────────────────────────────────
 
-    /**
-     * 发送消息（SSE 流式返回）
-     */
-    public SseEmitter sendMessage(String userId, SendMessageRequest request) {
+    public SseEmitter sendMessage(UUID userId, SendMessageRequest request) {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(ResultCode.USER_NOT_FOUND);
@@ -89,6 +106,10 @@ public class ChatService {
 
         checkDailyLimit(userId, user);
 
+        // 积分余额预检
+        billingService.checkBalanceBeforeRequest(userId, "CHAT");
+
+        // 风险检测
         RiskLevelEnum riskLevel = riskService.detectRisk(request.getMessage());
         if (riskLevel.isHigh()) {
             return handleHighRiskMessage(userId, request);
@@ -96,12 +117,15 @@ public class ChatService {
 
         ChatSession session = getOrCreateSession(userId, request.getSessionId(), user.getAiPersonality());
 
+        // 持久化用户消息
         ChatMessage userMsg = saveMessage(session.getId(), userId, RoleEnum.USER.getCode(),
                 request.getMessage(), null, riskLevel.getCode());
+
+        // 异步情绪分析（保持原有行为）
         emotionService.analyzeEmotionAndSaveMemoryAsync(userId, userMsg.getId(), request.getMessage());
 
-        List<Message> messages = buildMessages(userId, session, request.getMessage());
-        int estimatedContextTokens = estimateContextTokens(messages);
+        // 估算 token 用于计费预扣
+        int estimatedContextTokens = estimateContextTokens(request.getMessage());
 
         AiUsageRecord usageRecord = null;
         try {
@@ -114,13 +138,10 @@ public class ChatService {
             log.error("Billing pre-deduct failed, continue chat: userId={}", userId, e);
         }
 
-        return buildSseStream(userId, session, request, messages, estimatedContextTokens, usageRecord);
+        return buildSseStream(userId, session, request, estimatedContextTokens, usageRecord);
     }
 
-    /**
-     * 停止当前用户的流式输出
-     */
-    public void stopStreaming(String userId) {
+    public void stopStreaming(UUID userId) {
         AtomicBoolean stopFlag = stopFlagMap.get(userId);
         if (stopFlag != null) {
             stopFlag.set(true);
@@ -131,10 +152,7 @@ public class ChatService {
         }
     }
 
-    /**
-     * 编辑用户消息并重新发送
-     */
-    public SseEmitter editMessage(String userId, EditMessageRequest request) {
+    public SseEmitter editMessage(UUID userId, EditMessageRequest request) {
         ChatMessage message = chatMessageMapper.selectOne(
                 new LambdaQueryWrapper<ChatMessage>()
                         .eq(ChatMessage::getId, request.getMessageId())
@@ -162,10 +180,7 @@ public class ChatService {
         return sendMessage(userId, sendRequest);
     }
 
-    /**
-     * 获取会话列表
-     */
-    public IPage<ChatSessionDTO> getSessionList(String userId, Integer page, Integer size) {
+    public IPage<ChatSessionDTO> getSessionList(UUID userId, Integer page, Integer size) {
         IPage<ChatSession> sessionPage = chatSessionMapper.selectPage(
                 new Page<>(page, size),
                 new LambdaQueryWrapper<ChatSession>()
@@ -182,10 +197,7 @@ public class ChatService {
                 .build());
     }
 
-    /**
-     * 分页获取会话消息列表
-     */
-    public IPage<ChatMessageDTO> getMessageList(String userId, String sessionId, Integer page, Integer size) {
+    public IPage<ChatMessageDTO> getMessageList(UUID userId, UUID sessionId, Integer page, Integer size) {
         ChatSession session = chatSessionMapper.selectOne(
                 new LambdaQueryWrapper<ChatSession>()
                         .eq(ChatSession::getId, sessionId)
@@ -213,10 +225,7 @@ public class ChatService {
                 .build());
     }
 
-    /**
-     * 删除会话（逻辑删除）
-     */
-    public void deleteSession(String userId, String sessionId) {
+    public void deleteSession(UUID userId, UUID sessionId) {
         ChatSession session = chatSessionMapper.selectOne(
                 new LambdaQueryWrapper<ChatSession>()
                         .eq(ChatSession::getId, sessionId)
@@ -243,9 +252,20 @@ public class ChatService {
 
     // ─── SSE 核心流 ───────────────────────────────────────────────────────────
 
-    private SseEmitter buildSseStream(String userId, ChatSession session, SendMessageRequest request,
-                                       List<Message> messages, int estimatedContextTokens,
-                                       AiUsageRecord usageRecord) {
+    /**
+     * 构建 SSE 流式响应
+     *
+     * <p>使用 Spring AI ChatClient Advisor 链：
+     * <ol>
+     *   <li>LongTermMemoryAdvisor：注入长期记忆（BEFORE_MODEL）</li>
+     *   <li>MessageChatMemoryAdvisor：注入/保存会话历史（BEFORE + AFTER）</li>
+     *   <li>MemoryExtractionAdvisor：异步提取记忆（AFTER_MODEL）</li>
+     * </ol>
+     *
+     * <p>通过 {@code advisors()} 动态传入会话级上下文（conversationId、userId、userMessage）。
+     */
+    private SseEmitter buildSseStream(UUID userId, ChatSession session, SendMessageRequest request,
+                                       int estimatedContextTokens, AiUsageRecord usageRecord) {
         SseEmitter emitter = new SseEmitter(60_000L);
         StringBuilder fullResponse = new StringBuilder();
         AtomicInteger totalPromptTokens = new AtomicInteger(0);
@@ -259,15 +279,39 @@ public class ChatService {
         emitter.onCompletion(() -> removeSseEntry(userId, emitter, stopFlag));
         emitter.onError(e -> removeSseEntry(userId, emitter, stopFlag));
 
+        // 构建 System Prompt（包含人格设置）
+        String systemPrompt = promptService.buildStaticSystemPrompt(session.getAiPersonality());
+
+        // conversationId = "session:{sessionId}"（MessageChatMemoryAdvisor 使用）
+        String conversationId = MindEchoChatMemoryRepository.buildConversationId(session.getId());
+
         try {
-            chatClient.prompt()
-                    .messages(messages)
+            // 渐进式工具披露：仅当用户消息涉及星盘/占星时动态注入占星工具
+            var promptSpec = chatClient.prompt()
+                    .system(systemPrompt)
+                    .user(request.getMessage())
+                    // 通过 advisors() 传入会话级上下文（覆盖 Advisor 所需的动态参数）
+                    .advisors(advisorSpec -> advisorSpec
+                            // MessageChatMemoryAdvisor 需要的 conversationId
+                            .param(ChatMemory.CONVERSATION_ID, conversationId)
+                            // LongTermMemoryAdvisor 需要的 userId
+                            .param(LongTermMemoryAdvisor.USER_ID_KEY, userId)
+                            // MemoryExtractionAdvisor 需要的用户消息原文
+                            .param("mindecho_userMessage", request.getMessage())
+                    );
+
+            // 渐进式工具披露：仅当检测到占星关键词时注入占星工具
+            if (isAstrologyRelated(request.getMessage())) {
+                log.debug("Astrology keywords detected, injecting astrology tools for userId={}", userId);
+                promptSpec = promptSpec.tools(astrologyTools);
+            }
+
+            promptSpec
                     .stream()
                     .chatResponse()
                     .subscribe(
                             chunk -> {
                                 if (stopFlag.get()) return;
-                                // 发送文本片段
                                 if (chunk.getResult() != null && chunk.getResult().getOutput() != null) {
                                     String text = chunk.getResult().getOutput().getText();
                                     if (text != null && !text.isEmpty()) {
@@ -275,7 +319,6 @@ public class ChatService {
                                         trySendText(emitter, text);
                                     }
                                 }
-                                // 收集 token 用量
                                 try {
                                     var usage = chunk.getMetadata().getUsage();
                                     Integer pt = usage.getPromptTokens().intValue();
@@ -287,23 +330,22 @@ public class ChatService {
                                 }
                             },
                             error -> {
-                                log.error("AI chat error", error);
+                                log.error("AI chat error for userId={}", userId, error);
                                 if (usageRecord != null) {
                                     billingService.failAndRefund(usageRecord.getId(), userId);
                                 }
                                 tryCompleteWithError(emitter, error);
                             },
                             () -> {
+                                // 持久化 AI 回复
                                 if (!fullResponse.isEmpty()) {
                                     saveMessage(session.getId(), userId, RoleEnum.ASSISTANT.getCode(),
                                             fullResponse.toString(), null, RiskLevelEnum.LOW.getCode());
                                 }
+                                // 更新会话标题
                                 updateSessionTitle(session, request.getMessage());
 
-                                if (!stopFlag.get()) {
-                                    memoryService.extractAndSaveMemoryAsync(userId, request.getMessage(), fullResponse.toString());
-                                }
-
+                                // 计费结算
                                 if (usageRecord != null && billingSettledFlag.compareAndSet(false, true)) {
                                     settleOrInterruptBilling(usageRecord.getId(), userId,
                                             totalPromptTokens.get(), totalCompletionTokens.get(),
@@ -314,7 +356,7 @@ public class ChatService {
                             }
                     );
         } catch (Exception e) {
-            log.error("Chat error", e);
+            log.error("Chat error for userId={}", userId, e);
             if (usageRecord != null) {
                 billingService.failAndRefund(usageRecord.getId(), userId);
             }
@@ -323,10 +365,7 @@ public class ChatService {
         return emitter;
     }
 
-    /**
-     * 处理高风险消息（直接返回安全提示，不调用 AI）
-     */
-    private SseEmitter handleHighRiskMessage(String userId, SendMessageRequest request) {
+    private SseEmitter handleHighRiskMessage(UUID userId, SendMessageRequest request) {
         try {
             User user = userMapper.selectById(userId);
             String personality = user != null ? user.getAiPersonality() : personalityService.getDefaultCode();
@@ -353,9 +392,8 @@ public class ChatService {
         return emitter;
     }
 
-    // ─── SSE 辅助方法 ─────────────────────────────────────────────────────────
+    // ─── SSE 工具方法 ─────────────────────────────────────────────────────────
 
-    /** 安全发送文本片段，忽略 emitter 已关闭的情况 */
     private void trySendText(SseEmitter emitter, String text) {
         try {
             emitter.send(SseEmitter.event().data(text, MediaType.TEXT_PLAIN));
@@ -367,8 +405,7 @@ public class ChatService {
         }
     }
 
-    /** 安全发送 done 事件并完成 emitter */
-    private void sendDoneAndComplete(SseEmitter emitter, String userId) {
+    private void sendDoneAndComplete(SseEmitter emitter, UUID userId) {
         try {
             emitter.send(SseEmitter.event().name("done").data("[DONE]", MediaType.TEXT_PLAIN));
             emitter.complete();
@@ -380,7 +417,6 @@ public class ChatService {
         }
     }
 
-    /** 安全关闭 emitter（携带错误） */
     private void tryCompleteWithError(SseEmitter emitter, Throwable error) {
         try {
             emitter.completeWithError(error);
@@ -388,14 +424,14 @@ public class ChatService {
         }
     }
 
-    private void removeSseEntry(String userId, SseEmitter emitter, AtomicBoolean stopFlag) {
+    private void removeSseEntry(UUID userId, SseEmitter emitter, AtomicBoolean stopFlag) {
         activeSseMap.remove(userId, emitter);
         stopFlagMap.remove(userId, stopFlag);
     }
 
     // ─── 计费结算 ─────────────────────────────────────────────────────────────
 
-    private void settleOrInterruptBilling(String usageRecordId, String userId,
+    private void settleOrInterruptBilling(UUID usageRecordId, UUID userId,
                                            int promptTk, int completionTk,
                                            int estimatedContextTokens, int responseLength,
                                            boolean interrupted) {
@@ -414,48 +450,33 @@ public class ChatService {
         }
     }
 
-    // ─── 业务逻辑辅助 ─────────────────────────────────────────────────────────
+    // ─── 业务辅助 ─────────────────────────────────────────────────────────────
 
-    private List<Message> buildMessages(String userId, ChatSession session, String userInput) {
-        List<Message> messages = new ArrayList<>();
+    /**
+     * 估算 Context Token 数量（用于计费预扣）
+     *
+     * <p>简化计算：仅基于用户消息长度估算，实际 token 数在响应完成时从 usage 中获取。
+     */
+    private int estimateContextTokens(String userMessage) {
+        return Math.max((userMessage != null ? userMessage.length() : 0) / 3 + 500, 200);
+    }
 
-        messages.add(new SystemMessage(promptService.buildStaticSystemPrompt(session.getAiPersonality())));
-
-        String memoryPrompt = promptService.buildMemorySystemPrompt(userId, userInput);
-        if (memoryPrompt != null && !memoryPrompt.isBlank()) {
-            messages.add(new SystemMessage(memoryPrompt));
+    /**
+     * 判断消息是否与星盘/占星相关（用于渐进式工具披露）
+     */
+    private boolean isAstrologyRelated(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
         }
-
-        List<ChatMessage> history = chatMessageMapper.selectList(
-                new LambdaQueryWrapper<ChatMessage>()
-                        .eq(ChatMessage::getSessionId, session.getId())
-                        .eq(ChatMessage::getDeleted, 0)
-                        .orderByDesc(ChatMessage::getCreatedTime)
-                        .last("LIMIT 10")
-        );
-        List<ChatMessage> orderedHistory = new ArrayList<>(history);
-        Collections.reverse(orderedHistory);
-
-        for (ChatMessage msg : orderedHistory) {
-            if (RoleEnum.USER.getCode().equals(msg.getRole())) {
-                messages.add(new UserMessage(msg.getContent()));
-            } else if (RoleEnum.ASSISTANT.getCode().equals(msg.getRole())) {
-                messages.add(new AssistantMessage(msg.getContent()));
+        for (String keyword : ASTROLOGY_KEYWORDS) {
+            if (message.contains(keyword)) {
+                return true;
             }
         }
-
-        messages.add(new UserMessage(userInput));
-        return messages;
+        return false;
     }
 
-    private int estimateContextTokens(List<Message> messages) {
-        int totalChars = messages.stream()
-                .mapToInt(msg -> msg.getText() != null ? msg.getText().length() : 0)
-                .sum();
-        return Math.max(totalChars / 3, 100);
-    }
-
-    private ChatSession getOrCreateSession(String userId, String sessionId, String personality) {
+    private ChatSession getOrCreateSession(UUID userId, UUID sessionId, String personality) {
         if (sessionId != null) {
             ChatSession session = chatSessionMapper.selectOne(
                     new LambdaQueryWrapper<ChatSession>()
@@ -486,7 +507,7 @@ public class ChatService {
         }
     }
 
-    private ChatMessage saveMessage(String sessionId, String userId, String role,
+    private ChatMessage saveMessage(UUID sessionId, UUID userId, String role,
                                      String content, String emotion, String riskLevel) {
         ChatMessage message = new ChatMessage();
         message.setSessionId(sessionId);
@@ -499,7 +520,7 @@ public class ChatService {
         return message;
     }
 
-    private void checkDailyLimit(String userId, User user) {
+    private void checkDailyLimit(UUID userId, User user) {
         if (user.isVip()) return;
         Long todayCount = chatMessageMapper.selectCount(
                 new LambdaQueryWrapper<ChatMessage>()

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * AI 人格配置实体
@@ -12,8 +13,8 @@ import java.time.OffsetDateTime;
 @TableName("ai_personality")
 public class AiPersonality {
 
-    @TableId(type = IdType.ASSIGN_UUID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private UUID id;
 
     /** 人格编码，唯一标识，对应 user.ai_personality 字段 */
     @TableField("code")

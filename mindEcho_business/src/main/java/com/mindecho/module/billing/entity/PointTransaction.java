@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 积分流水实体
@@ -15,8 +16,8 @@ import java.time.OffsetDateTime;
 @TableName("point_transaction")
 public class PointTransaction {
 
-    @TableId(type = IdType.ASSIGN_UUID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private UUID id;
 
     /** 流水号（全局唯一，便于幂等校验） */
     @TableField("transaction_no")
@@ -24,7 +25,7 @@ public class PointTransaction {
 
     /** 用户ID */
     @TableField("user_id")
-    private String userId;
+    private UUID userId;
 
     /**
      * 变动积分（正数=增加，负数=减少）
@@ -49,13 +50,13 @@ public class PointTransaction {
     private Long afterBalance;
 
     /**
-     * 关联业务ID（UUID 字符串）
+     * 关联业务ID（UUID）
      * - RECHARGE/POINT_RECHARGE: vip_order.id 或 point_order.id
      * - PRE_DEDUCT/CONSUME/REFUND: ai_usage_record.id
      * - SYSTEM_GIFT/ADMIN_ADJUST: 后台操作 ID
      */
     @TableField("business_id")
-    private String businessId;
+    private UUID businessId;
 
     /** 备注说明 */
     @TableField("remark")

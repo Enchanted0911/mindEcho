@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 积分充值订单 DTO
@@ -13,7 +14,7 @@ import java.time.OffsetDateTime;
 @Builder
 public class PointOrderDTO {
 
-    private String id;
+    private UUID id;
     private String orderNo;
     private BigDecimal amount;
     private Long points;

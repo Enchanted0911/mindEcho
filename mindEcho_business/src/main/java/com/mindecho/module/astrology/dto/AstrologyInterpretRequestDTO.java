@@ -1,25 +1,16 @@
 package com.mindecho.module.astrology.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * AI 占星解读请求（通用，适用于单盘/和盘/流运三类解读接口）
+ * AI 占星解读请求（适用于单盘解读接口）
+ *
+ * <p>新版架构：chart 数据由后端从 user_astrology 表自动读取，前端无需传入。
  *
  * POST /api/astrology/natal/interpret
- * POST /api/astrology/synastry/interpret
- * POST /api/astrology/transit/interpret
  */
 @Data
 public class AstrologyInterpretRequestDTO {
-
-    /**
-     * 星盘原始数据（来自 natal / synastry / transit 接口的响应中的 chart 字段）
-     * 直接透传给 RAG + Prompt，不做额外解析
-     */
-    @NotNull(message = "星盘数据不能为空")
-    private JsonNode chart;
 
     /**
      * 解读焦点（控制 AI 重点方向）
@@ -27,14 +18,6 @@ public class AstrologyInterpretRequestDTO {
      * 单盘可选值：
      *   personality（性格/潜能）、career（事业/天赋）、
      *   emotion（情感模式）、growth（成长方向）
-     *
-     * 和盘可选值：
-     *   compatibility（兼容性）、dynamic（关系动力）、
-     *   challenge（关系挑战）、growth（共同成长）
-     *
-     * 流运可选值：
-     *   current（当下状态）、love（情感变化）、
-     *   career（事业机遇）、advice（近期建议）
      *
      * 默认为 null = 全面解读
      */
@@ -54,8 +37,7 @@ public class AstrologyInterpretRequestDTO {
     private String interpretType;
 
     /**
-     * 流运/和盘场景下的额外上下文（如对方名字、查询日期等）
-     * 由 Controller 层根据接口类型注入，对单盘解读可为 null
+     * 额外上下文（由 Controller 层根据接口类型注入，对单盘解读可为 null）
      */
     private String extraContext;
 }

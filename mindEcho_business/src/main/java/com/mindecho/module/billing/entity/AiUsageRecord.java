@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * AI 使用量记录实体
@@ -16,8 +17,8 @@ import java.time.OffsetDateTime;
 @TableName("ai_usage_record")
 public class AiUsageRecord {
 
-    @TableId(type = IdType.ASSIGN_UUID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private UUID id;
 
     /** 请求唯一ID（幂等键，防止重复结算） */
     @TableField("request_id")
@@ -25,11 +26,11 @@ public class AiUsageRecord {
 
     /** 用户ID */
     @TableField("user_id")
-    private String userId;
+    private UUID userId;
 
     /** 关联会话ID（chat_session.id，非聊天业务可为空） */
     @TableField("session_id")
-    private String sessionId;
+    private UUID sessionId;
 
     /**
      * 业务类型：CHAT / ASTROLOGY_NATAL / ASTROLOGY_SYNASTRY / ASTROLOGY_TRANSIT / EMOTION_ANALYZE
@@ -88,9 +89,9 @@ public class AiUsageRecord {
     @TableField("status")
     private String status;
 
-    /** 是否由 streaming 中断（影响计费方式） */
+    /** 是否由 streaming 中断（影响计费方式），0=否 1=是，与数据库 SMALLINT 类型对应 */
     @TableField("streaming_interrupted")
-    private Boolean streamingInterrupted;
+    private Integer streamingInterrupted;
 
     /** 创建时间（带时区） */
     @TableField(value = "created_time", fill = FieldFill.INSERT)

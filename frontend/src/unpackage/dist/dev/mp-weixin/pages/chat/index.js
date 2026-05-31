@@ -19,8 +19,8 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     const showPersonalityPicker = common_vendor.ref(false);
     common_vendor.ref(false);
     const isLoadingSessions = common_vendor.ref(false);
-    const showEditPopup = common_vendor.ref(false);
-    const editTargetMsgId = common_vendor.ref("");
+    const selectedMsgId = common_vendor.ref("");
+    const editingMsgId = common_vendor.ref("");
     const editText = common_vendor.ref("");
     common_vendor.computed(() => personalityStore.list);
     const femalePersonalities = common_vendor.computed(() => personalityStore.femaleList);
@@ -57,7 +57,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           chatStore.appendSessions(result.records || [], nextPage, result.pages ?? nextPage);
         }
       } catch (e) {
-        common_vendor.index.__f__("error", "at pages/chat/index.vue:83", "Load sessions failed:", e);
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:70", "Load sessions failed:", e);
       } finally {
         isLoadingSessions.value = false;
         chatStore.isLoadingMoreSession = false;
@@ -91,7 +91,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         applyMessagePage(result.records, 1, result.pages, false);
         scrollToMsg();
       } catch (e) {
-        common_vendor.index.__f__("error", "at pages/chat/index.vue:140", "Load history failed:", e);
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:114", "Load history failed:", e);
       }
     }
     async function onMsgScrollToUpper() {
@@ -118,7 +118,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           chatStore.msgTotalPages = chatStore.msgPage;
         }
       } catch (e) {
-        common_vendor.index.__f__("error", "at pages/chat/index.vue:170", "Load more messages failed:", e);
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:139", "Load more messages failed:", e);
       } finally {
         chatStore.isLoadingMoreMsg = false;
       }
@@ -182,17 +182,21 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         async () => {
           chatStore.finishStreaming(aiMsgId);
           chatStore.setActiveRequestTask(null);
-          loadSessions(true);
+          await loadSessions(true);
+          if (!chatStore.currentSessionId && chatStore.sessions.length > 0) {
+            chatStore.setCurrentSession(chatStore.sessions[0].id);
+          }
           if (chatStore.currentSessionId) {
             await refreshLatestMessages(chatStore.currentSessionId);
           }
           scrollToMsg();
         },
         (err) => {
-          common_vendor.index.__f__("error", "at pages/chat/index.vue:254", "SSE error:", err);
+          common_vendor.index.__f__("error", "at pages/chat/index.vue:219", "SSE error:", err);
           chatStore.finishStreaming(aiMsgId);
           chatStore.setActiveRequestTask(null);
-          common_vendor.index.showToast({ title: "AI 回复失败，请重试", icon: "none" });
+          const msg = err instanceof Error && err.message ? err.message : "AI 回复失败，请重试";
+          common_vendor.index.showToast({ title: msg, icon: "none", duration: 3e3 });
         }
       );
       chatStore.startStreaming(aiMsgId, task);
@@ -201,7 +205,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       try {
         await api_chat.stopStreaming();
       } catch (e) {
-        common_vendor.index.__f__("error", "at pages/chat/index.vue:270", "Stop streaming failed:", e);
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:233", "Stop streaming failed:", e);
       }
       if (chatStore.activeRequestTask) {
         chatStore.activeRequestTask.abort();
@@ -211,42 +215,46 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         chatStore.finishStreaming(chatStore.streamingMessageId);
       }
     }
-    function onLongPressUserMsg(msgId, content) {
+    function onTapUserMsg(msgId) {
       if (isStreaming.value)
         return;
-      editTargetMsgId.value = msgId;
+      if (selectedMsgId.value === msgId) {
+        selectedMsgId.value = "";
+        return;
+      }
+      if (editingMsgId.value && editingMsgId.value !== msgId) {
+        editingMsgId.value = "";
+        editText.value = "";
+      }
+      selectedMsgId.value = msgId;
+    }
+    function startInlineEdit(msgId, content) {
+      editingMsgId.value = msgId;
       editText.value = content;
-      showEditPopup.value = true;
+      selectedMsgId.value = "";
     }
-    function onTapUserMsg(msgId, content) {
-      if (isStreaming.value)
-        return;
-      common_vendor.index.showActionSheet({
-        itemList: ["编辑并重新发送"],
-        success: (res) => {
-          if (res.tapIndex === 0) {
-            editTargetMsgId.value = msgId;
-            editText.value = content;
-            showEditPopup.value = true;
-          }
-        }
-      });
+    function cancelInlineEdit() {
+      editingMsgId.value = "";
+      editText.value = "";
     }
-    async function confirmEdit() {
+    async function confirmInlineEdit() {
       const newText = editText.value.trim();
-      if (!newText || !editTargetMsgId.value || !chatStore.currentSessionId)
+      if (!newText || !editingMsgId.value)
         return;
-      showEditPopup.value = false;
-      chatStore.removeMessageFrom(editTargetMsgId.value);
+      const targetMsgId = editingMsgId.value;
+      editingMsgId.value = "";
+      editText.value = "";
+      const isTemporaryMsg = targetMsgId.startsWith("user_");
+      chatStore.removeMessageFrom(targetMsgId);
       scrollToMsg();
-      const editUserMsgId = `user_edit_${Date.now()}`;
+      const newUserMsgId = `user_${Date.now()}`;
       chatStore.addMessage({
-        id: editUserMsgId,
+        id: newUserMsgId,
         role: "user",
         content: newText,
         createdAt: Date.now()
       });
-      const aiMsgId = `ai_edit_${Date.now()}`;
+      const aiMsgId = `ai_${Date.now()}`;
       chatStore.addMessage({
         id: aiMsgId,
         role: "assistant",
@@ -255,30 +263,48 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         isStreaming: true
       });
       scrollToMsg();
-      const task = api_chat.createEditSseConnection(
-        editTargetMsgId.value,
-        chatStore.currentSessionId,
-        newText,
-        (chunk) => {
-          chatStore.updateStreamingMessage(aiMsgId, chunk);
-          scrollToMsg();
-        },
-        async () => {
-          chatStore.finishStreaming(aiMsgId);
-          chatStore.setActiveRequestTask(null);
-          loadSessions(true);
-          if (chatStore.currentSessionId) {
-            await refreshLatestMessages(chatStore.currentSessionId);
-          }
-          scrollToMsg();
-        },
-        (err) => {
-          common_vendor.index.__f__("error", "at pages/chat/index.vue:360", "Edit SSE error:", err);
-          chatStore.finishStreaming(aiMsgId);
-          chatStore.setActiveRequestTask(null);
-          common_vendor.index.showToast({ title: "重新发送失败，请重试", icon: "none" });
+      const onChunk = (chunk) => {
+        chatStore.updateStreamingMessage(aiMsgId, chunk);
+        scrollToMsg();
+      };
+      const onDone = async () => {
+        chatStore.finishStreaming(aiMsgId);
+        chatStore.setActiveRequestTask(null);
+        await loadSessions(true);
+        if (!chatStore.currentSessionId && chatStore.sessions.length > 0) {
+          chatStore.setCurrentSession(chatStore.sessions[0].id);
         }
-      );
+        if (chatStore.currentSessionId) {
+          await refreshLatestMessages(chatStore.currentSessionId);
+        }
+        scrollToMsg();
+      };
+      const onError = (err) => {
+        common_vendor.index.__f__("error", "at pages/chat/index.vue:318", "Edit SSE error:", err);
+        chatStore.finishStreaming(aiMsgId);
+        chatStore.setActiveRequestTask(null);
+        const msg = err instanceof Error && err.message ? err.message : "重新发送失败，请重试";
+        common_vendor.index.showToast({ title: msg, icon: "none", duration: 3e3 });
+      };
+      let task;
+      if (isTemporaryMsg || !chatStore.currentSessionId) {
+        task = api_chat.createSseConnection(
+          chatStore.currentSessionId,
+          newText,
+          onChunk,
+          onDone,
+          onError
+        );
+      } else {
+        task = api_chat.createEditSseConnection(
+          targetMsgId,
+          chatStore.currentSessionId,
+          newText,
+          onChunk,
+          onDone,
+          onError
+        );
+      }
       chatStore.startStreaming(aiMsgId, task);
     }
     async function refreshLatestMessages(sessionId) {
@@ -296,7 +322,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           chatStore.replaceTrailingMessages(newMsgs, 1, result.pages ?? 1);
         }
       } catch (e) {
-        common_vendor.index.__f__("warn", "at pages/chat/index.vue:392", "refreshLatestMessages failed:", e);
+        common_vendor.index.__f__("warn", "at pages/chat/index.vue:362", "refreshLatestMessages failed:", e);
       }
     }
     function scrollToMsg() {
@@ -326,8 +352,8 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         a: common_vendor.o(($event) => showSessionPanel.value = !showSessionPanel.value, "c8"),
         b: common_vendor.t(personality.value.emoji),
         c: common_vendor.t(personality.value.name),
-        d: common_vendor.o(($event) => showPersonalityPicker.value = true, "59"),
-        e: common_vendor.o(startNewChat, "dc"),
+        d: common_vendor.o(($event) => showPersonalityPicker.value = true, "03"),
+        e: common_vendor.o(startNewChat, "48"),
         f: isLoadingMoreMsg.value
       }, isLoadingMoreMsg.value ? {} : common_vendor.unref(chatStore).msgTotalPages !== -1 && !common_vendor.unref(chatStore).hasMoreMessages() ? {} : {}, {
         g: common_vendor.unref(chatStore).msgTotalPages !== -1 && !common_vendor.unref(chatStore).hasMoreMessages(),
@@ -349,39 +375,52 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           }, msg.role === "assistant" ? {
             b: common_vendor.t(personality.value.emoji)
           } : {}, {
-            c: common_vendor.t(msg.content),
-            d: msg.isStreaming
-          }, msg.isStreaming ? {} : {}, {
-            e: msg.role === "user" && !isStreaming.value
-          }, msg.role === "user" && !isStreaming.value ? {} : {}, {
-            f: msg.role === "user" ? 1 : "",
-            g: msg.role === "assistant" ? 1 : "",
-            h: msg.isStreaming ? 1 : "",
-            i: common_vendor.o(($event) => msg.role === "user" && !isStreaming.value ? onLongPressUserMsg(msg.id, msg.content) : void 0, msg.id),
-            j: common_vendor.o(($event) => msg.role === "user" && !isStreaming.value ? onTapUserMsg(msg.id, msg.content) : void 0, msg.id),
-            k: msg.id,
-            l: `msg-${msg.id}`,
-            m: msg.role === "user" ? 1 : "",
-            n: msg.role === "assistant" ? 1 : ""
+            c: msg.role === "user"
+          }, msg.role === "user" ? common_vendor.e({
+            d: editingMsgId.value === msg.id
+          }, editingMsgId.value === msg.id ? {
+            e: editText.value,
+            f: common_vendor.o(($event) => editText.value = $event.detail.value, msg.id),
+            g: common_vendor.o(cancelInlineEdit, msg.id),
+            h: common_vendor.o(confirmInlineEdit, msg.id)
+          } : common_vendor.e({
+            i: common_vendor.t(msg.content),
+            j: selectedMsgId.value === msg.id ? 1 : "",
+            k: common_vendor.o(($event) => onTapUserMsg(msg.id), msg.id),
+            l: selectedMsgId.value === msg.id
+          }, selectedMsgId.value === msg.id ? {
+            m: common_vendor.o(($event) => startInlineEdit(msg.id, msg.content), msg.id)
+          } : {})) : common_vendor.e({
+            n: common_vendor.t(msg.content),
+            o: msg.isStreaming && !msg.content
+          }, msg.isStreaming && !msg.content ? {} : {}, {
+            p: msg.isStreaming && msg.content
+          }, msg.isStreaming && msg.content ? {} : {}, {
+            q: msg.isStreaming ? 1 : ""
+          }), {
+            r: msg.id,
+            s: `msg-${msg.id}`,
+            t: msg.role === "user" ? 1 : "",
+            v: msg.role === "assistant" ? 1 : ""
           });
         }),
         m: scrollToAnchor.value || scrollToBottom.value,
-        n: common_vendor.o(onMsgScrollToUpper, "ac"),
+        n: common_vendor.o(onMsgScrollToUpper, "9c"),
         o: isStreaming.value,
-        p: common_vendor.o(sendMessage, "06"),
+        p: common_vendor.o(sendMessage, "38"),
         q: inputText.value,
-        r: common_vendor.o(($event) => inputText.value = $event.detail.value, "c0"),
+        r: common_vendor.o(($event) => inputText.value = $event.detail.value, "be"),
         s: isStreaming.value
       }, isStreaming.value ? {
-        t: common_vendor.o(handleStopStreaming, "7b")
+        t: common_vendor.o(handleStopStreaming, "29")
       } : {
         v: inputText.value.trim() ? 1 : "",
-        w: common_vendor.o(sendMessage, "47")
+        w: common_vendor.o(sendMessage, "84")
       }, {
         x: showSessionPanel.value
       }, showSessionPanel.value ? common_vendor.e({
-        y: common_vendor.o(($event) => showSessionPanel.value = false, "1f"),
-        z: common_vendor.o(startNewChat, "41"),
+        y: common_vendor.o(($event) => showSessionPanel.value = false, "ca"),
+        z: common_vendor.o(startNewChat, "bf"),
         A: isLoadingSessions.value
       }, isLoadingSessions.value ? {} : sessions.value.length === 0 ? {} : common_vendor.e({
         C: common_vendor.f(sessions.value, (session, k0, i0) => {
@@ -397,30 +436,19 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         D: isLoadingMoreSession.value
       }, isLoadingMoreSession.value ? {} : !common_vendor.unref(chatStore).hasMoreSessions() ? {} : {}, {
         E: !common_vendor.unref(chatStore).hasMoreSessions(),
-        F: common_vendor.o(onSessionScrollToLower, "a2")
+        F: common_vendor.o(onSessionScrollToLower, "0e")
       }), {
         B: sessions.value.length === 0,
         G: common_vendor.o(() => {
-        }, "f7"),
-        H: common_vendor.o(($event) => showSessionPanel.value = false, "50")
+        }, "6e"),
+        H: common_vendor.o(($event) => showSessionPanel.value = false, "2c")
       }) : {}, {
-        I: showEditPopup.value
-      }, showEditPopup.value ? {
-        J: common_vendor.o(($event) => showEditPopup.value = false, "b1"),
-        K: editText.value,
-        L: common_vendor.o(($event) => editText.value = $event.detail.value, "ab"),
-        M: common_vendor.o(($event) => showEditPopup.value = false, "9f"),
-        N: common_vendor.o(confirmEdit, "c3"),
-        O: common_vendor.o(() => {
-        }, "d6"),
-        P: common_vendor.o(($event) => showEditPopup.value = false, "2f")
-      } : {}, {
-        Q: showPersonalityPicker.value
+        I: showPersonalityPicker.value
       }, showPersonalityPicker.value ? common_vendor.e({
-        R: common_vendor.o(($event) => showPersonalityPicker.value = false, "b0"),
-        S: femalePersonalities.value.length > 0
+        J: common_vendor.o(($event) => showPersonalityPicker.value = false, "87"),
+        K: femalePersonalities.value.length > 0
       }, femalePersonalities.value.length > 0 ? {
-        T: common_vendor.f(femalePersonalities.value, (p, k0, i0) => {
+        L: common_vendor.f(femalePersonalities.value, (p, k0, i0) => {
           return {
             a: common_vendor.t(p.emoji),
             b: common_vendor.t(p.name),
@@ -431,9 +459,9 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           };
         })
       } : {}, {
-        U: malePersonalities.value.length > 0
+        M: malePersonalities.value.length > 0
       }, malePersonalities.value.length > 0 ? {
-        V: common_vendor.f(malePersonalities.value, (p, k0, i0) => {
+        N: common_vendor.f(malePersonalities.value, (p, k0, i0) => {
           return {
             a: common_vendor.t(p.emoji),
             b: common_vendor.t(p.name),
@@ -444,11 +472,11 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           };
         })
       } : {}, {
-        W: common_vendor.unref(personalityStore).loading
+        O: common_vendor.unref(personalityStore).loading
       }, common_vendor.unref(personalityStore).loading ? {} : {}, {
-        X: common_vendor.o(() => {
-        }, "1e"),
-        Y: common_vendor.o(($event) => showPersonalityPicker.value = false, "b1")
+        P: common_vendor.o(() => {
+        }, "c2"),
+        Q: common_vendor.o(($event) => showPersonalityPicker.value = false, "02")
       }) : {});
     };
   }

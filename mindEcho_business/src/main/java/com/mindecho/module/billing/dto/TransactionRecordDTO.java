@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 积分流水记录 DTO
@@ -12,7 +13,7 @@ import java.time.OffsetDateTime;
 @Builder
 public class TransactionRecordDTO {
 
-    private String id;
+    private UUID id;
 
     /** 流水号 */
     private String transactionNo;

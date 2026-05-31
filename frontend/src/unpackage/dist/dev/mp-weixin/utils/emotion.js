@@ -30,7 +30,22 @@ function getPersonalityInfo(code) {
 function parseDate(dateStr) {
   if (!dateStr)
     return /* @__PURE__ */ new Date(NaN);
-  return new Date(dateStr.replace(" ", "T"));
+  const normalized = dateStr.includes("T") ? dateStr : dateStr.replace(" ", "T");
+  const date = new Date(normalized);
+  if (isNaN(date.getTime())) {
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+    if (match) {
+      return new Date(
+        parseInt(match[1]),
+        parseInt(match[2]) - 1,
+        parseInt(match[3]),
+        parseInt(match[4]),
+        parseInt(match[5]),
+        parseInt(match[6])
+      );
+    }
+  }
+  return date;
 }
 exports.getEmotionInfo = getEmotionInfo;
 exports.getPersonalityInfo = getPersonalityInfo;

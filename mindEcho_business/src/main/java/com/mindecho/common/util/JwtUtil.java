@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.UUID;
 
 /**
  * JWT 工具类
@@ -27,14 +28,14 @@ public class JwtUtil {
     private Long expire;
 
     /**
-     * 生成 JWT Token（userId 为 UUID 字符串）
+     * 生成 JWT Token（userId 为 UUID）
      */
-    public String generateToken(String userId) {
+    public String generateToken(UUID userId) {
         Date now = new Date();
         Date expireDate = new Date(now.getTime() + expire * 1000);
 
         return Jwts.builder()
-                .subject(userId)
+                .subject(userId.toString())
                 .issuedAt(now)
                 .expiration(expireDate)
                 .signWith(getKey())
@@ -42,14 +43,23 @@ public class JwtUtil {
     }
 
     /**
-     * 从 Token 解析用户 ID（UUID 字符串）
+     * 从 Token 解析用户 ID（返回 UUID）
      */
-    public String getUserId(String token) {
+    public UUID getUserId(String token) {
         Claims claims = getClaims(token);
         if (claims == null) {
             return null;
         }
-        return claims.getSubject();
+        String subject = claims.getSubject();
+        if (subject == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(subject);
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid UUID in JWT subject: {}", subject);
+            return null;
+        }
     }
 
     /**

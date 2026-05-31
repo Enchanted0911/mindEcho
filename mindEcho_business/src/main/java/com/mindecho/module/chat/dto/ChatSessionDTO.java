@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 聊天会话 DTO
@@ -16,7 +17,7 @@ import java.time.OffsetDateTime;
 @AllArgsConstructor
 public class ChatSessionDTO {
 
-    private String id;
+    private UUID id;
     private String title;
     private String aiPersonality;
     /** ISO-8601 带时区格式 */

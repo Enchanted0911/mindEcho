@@ -2,14 +2,14 @@ package com.mindecho.module.auth.controller;
 
 import com.mindecho.common.result.Result;
 import com.mindecho.common.util.UserContext;
-import com.mindecho.module.auth.dto.LoginResponse;
-import com.mindecho.module.auth.dto.UpdateBirthInfoRequest;
-import com.mindecho.module.auth.dto.WxLoginRequest;
+import com.mindecho.module.auth.dto.*;
 import com.mindecho.module.auth.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 /**
  * 认证 Controller
@@ -40,7 +40,7 @@ public class AuthController {
      */
     @GetMapping("/profile")
     public Result<LoginResponse.UserInfoDTO> getProfile() {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         LoginResponse.UserInfoDTO userInfo = authService.getProfile(userId);
         return Result.success(userInfo);
     }
@@ -51,9 +51,43 @@ public class AuthController {
      */
     @PutMapping("/profile/birth")
     public Result<LoginResponse.UserInfoDTO> updateBirthInfo(@Valid @RequestBody UpdateBirthInfoRequest request) {
-        String userId = UserContext.getUserId();
+        UUID userId = UserContext.getUserId();
         log.info("UpdateBirthInfo: userId={}, city={}", userId, request.getBirthCity());
         LoginResponse.UserInfoDTO userInfo = authService.updateBirthInfo(userId, request);
+        return Result.success(userInfo);
+    }
+
+    /**
+     * 保存和盘对方出生信息（需要登录）
+     *
+     * <p>前端每次提交和盘计算时调用，将对方信息持久化到 user 表。
+     * 下次打开和盘页面时，前端从 /api/auth/profile 接口获取后自动回填。
+     *
+     * PUT /api/auth/profile/synastry-partner
+     */
+    @PutMapping("/profile/synastry-partner")
+    public Result<LoginResponse.UserInfoDTO> updateSynastryPartner(
+            @Valid @RequestBody UpdateSynastryPartnerRequest request) {
+        UUID userId = UserContext.getUserId();
+        log.info("UpdateSynastryPartner: userId={}, partnerCity={}", userId, request.getPartnerCity());
+        LoginResponse.UserInfoDTO userInfo = authService.updateSynastryPartner(userId, request);
+        return Result.success(userInfo);
+    }
+
+    /**
+     * 保存流运目标日期（需要登录）
+     *
+     * <p>前端每次提交流运计算时调用，将目标日期持久化到 user 表。
+     * 下次打开流运页面时，前端从 /api/auth/profile 接口获取后自动回填。
+     *
+     * PUT /api/auth/profile/transit-date
+     */
+    @PutMapping("/profile/transit-date")
+    public Result<LoginResponse.UserInfoDTO> updateTransitDate(
+            @Valid @RequestBody UpdateTransitDateRequest request) {
+        UUID userId = UserContext.getUserId();
+        log.info("UpdateTransitDate: userId={}, date={}", userId, request.getTargetDate());
+        LoginResponse.UserInfoDTO userInfo = authService.updateTransitDate(userId, request);
         return Result.success(userInfo);
     }
 }

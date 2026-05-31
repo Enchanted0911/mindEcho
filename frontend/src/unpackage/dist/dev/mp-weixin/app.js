@@ -2,6 +2,7 @@
 Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 const common_vendor = require("./common/vendor.js");
 const store_user = require("./store/user.js");
+const store_personality = require("./store/personality.js");
 const store_index = require("./store/index.js");
 if (!Math) {
   "./pages/login/index.js";
@@ -26,6 +27,10 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         if (userInfo) {
           userStore.setUserInfo(JSON.parse(userInfo));
         }
+        const personalityStore = store_personality.usePersonalityStore();
+        personalityStore.ensureLoaded().catch((err) => {
+          common_vendor.index.__f__("warn", "at App.vue:20", "App.vue: personality preload failed", err);
+        });
       } else {
         common_vendor.index.reLaunch({ url: "/pages/login/index" });
       }

@@ -8,17 +8,17 @@ import lombok.Data;
 /**
  * 和盘（合盘）计算请求
  *
+ * <p>自己的出生信息由后端从 user 表读取，前端只需传对方的出生信息和名字。
+ * 若用户未设置出生信息，后端返回 7001 错误，前端应引导用户先设置出生信息。
+ *
  * POST /api/astrology/synastry
  */
 @Data
 public class SynastryRequestDTO {
 
-    /** 本人出生信息 */
-    @Valid
-    @NotNull(message = "本人出生信息不能为空")
-    private BirthInfoDTO selfBirthInfo;
-
-    /** 对方出生信息 */
+    /**
+     * 对方出生信息（自己的出生信息由后端从 user 表读取）
+     */
     @Valid
     @NotNull(message = "对方出生信息不能为空")
     private BirthInfoDTO partnerBirthInfo;

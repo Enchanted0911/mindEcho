@@ -1,21 +1,16 @@
 package com.mindecho.module.astrology.dto;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
  * 流运（过境）计算请求
  *
+ * <p>出生信息由后端从 user 表读取，前端无需传出生信息。
+ *
  * POST /api/astrology/transit
  */
 @Data
 public class TransitRequestDTO {
-
-    /** 本命盘出生信息 */
-    @Valid
-    @NotNull(message = "出生信息不能为空")
-    private BirthInfoDTO birthInfo;
 
     /**
      * 查询日期（格式 yyyy-MM-dd），null = 今天

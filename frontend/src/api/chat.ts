@@ -133,23 +133,38 @@ function createSseRequest(
     for (const frame of frames) {
       // 一帧可能包含多行（event: / data: / id: 等），逐行解析
       const lines = frame.split('\n')
+      let currentEvent = ''
+      let currentData = ''
+
       for (const line of lines) {
-        if (line.startsWith('data:')) {
-          const data = line.slice(5).trim()
-          if (data === '[DONE]') {
-            triggerDone()
-            return
-          }
-          if (data) {
-            onChunk(data)
-          }
-        } else if (line.startsWith('event:')) {
-          // 精确匹配 "event: done"，避免误匹配含 "done" 的其他事件名（如 "event: not-done"）
-          const eventName = line.slice(6).trim()
-          if (eventName === 'done') {
-            triggerDone()
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim()
+        } else if (line.startsWith('data:')) {
+          currentData = line.slice(5).trim()
+        }
+      }
+
+      // 处理各类事件
+      if (currentEvent === 'done' || currentData === '[DONE]') {
+        triggerDone()
+        return
+      } else if (currentEvent === 'error') {
+        // 后端通过 event: error 下发业务错误，提取 message 字段传递给调用方
+        let errorMessage = '服务出现问题，请稍后重试'
+        if (currentData) {
+          try {
+            const errorPayload = JSON.parse(currentData)
+            if (errorPayload.message) {
+              errorMessage = errorPayload.message
+            }
+          } catch (_) {
+            // JSON 解析失败时保留默认友好文案
           }
         }
+        onError(new Error(errorMessage))
+        return
+      } else if (currentData) {
+        onChunk(currentData)
       }
     }
   }

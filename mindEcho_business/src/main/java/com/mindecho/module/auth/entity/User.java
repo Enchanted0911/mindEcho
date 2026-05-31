@@ -5,16 +5,19 @@ import lombok.Data;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.UUID;
 
 /**
  * 用户实体
+ *
+ * <p>注意：出生信息与星盘数据已迁移至 user_astrology 表，通过 userId 关联。
  */
 @Data
-@TableName("user")
+@TableName("\"user\"")
 public class User {
 
-    @TableId(type = IdType.ASSIGN_UUID)
-    private String id;
+    @TableId(type = IdType.AUTO)
+    private UUID id;
 
     /** 微信 openid */
     @TableField("openid")
@@ -35,22 +38,6 @@ public class User {
     /** 当前使用的 AI 人格 */
     @TableField("ai_personality")
     private String aiPersonality;
-
-    /** 出生城市名称 */
-    @TableField("birth_city")
-    private String birthCity;
-
-    /** 出生地纬度 */
-    @TableField("birth_lat")
-    private Double birthLat;
-
-    /** 出生地经度 */
-    @TableField("birth_lng")
-    private Double birthLng;
-
-    /** 出生时间（格式：yyyy-MM-dd HH:mm，如 1995-08-15 14:30） */
-    @TableField("birth_time")
-    private String birthTime;
 
     /** 逻辑删除 */
     @TableLogic

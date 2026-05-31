@@ -27,6 +27,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 支付服务
@@ -123,7 +124,7 @@ public class PaymentService {
      * 创建会员订单并调用微信统一下单
      */
     @Transactional
-    public VipOrderDTO createOrder(String userId, CreateOrderRequest request) {
+    public VipOrderDTO createOrder(UUID userId, CreateOrderRequest request) {
         String vipType = request.getVipType();
 
         if (!VIP_PRICE_MAP.containsKey(vipType)) {
@@ -202,7 +203,7 @@ public class PaymentService {
      * 创建积分充值订单并调用微信统一下单
      */
     @Transactional
-    public PointOrderDTO createPointOrder(String userId, CreatePointOrderRequest request) {
+    public PointOrderDTO createPointOrder(UUID userId, CreatePointOrderRequest request) {
         String packageType = request.getPackageType();
         long[] packageInfo = POINT_PACKAGE_MAP.get(packageType);
         if (packageInfo == null) {
@@ -387,7 +388,7 @@ public class PaymentService {
 
     // ─────────────────────── 查询订单 ───────────────────────
 
-    public VipOrderDTO getOrder(String userId, String orderNo) {
+    public VipOrderDTO getOrder(UUID userId, String orderNo) {
         VipOrder order = vipOrderMapper.selectOne(
                 new LambdaQueryWrapper<VipOrder>()
                         .eq(VipOrder::getOrderNo, orderNo)
@@ -399,7 +400,7 @@ public class PaymentService {
         return toVipDTO(order);
     }
 
-    public PointOrderDTO getPointOrder(String userId, String orderNo) {
+    public PointOrderDTO getPointOrder(UUID userId, String orderNo) {
         PointOrder order = pointOrderMapper.selectOne(
                 new LambdaQueryWrapper<PointOrder>()
                         .eq(PointOrder::getOrderNo, orderNo)

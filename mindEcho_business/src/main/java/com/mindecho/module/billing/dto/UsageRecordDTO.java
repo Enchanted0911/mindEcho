@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * AI 使用量记录 DTO（用于消费详情展示）
@@ -12,7 +13,7 @@ import java.time.OffsetDateTime;
 @Builder
 public class UsageRecordDTO {
 
-    private String id;
+    private UUID id;
 
     /** 业务类型（CHAT/ASTROLOGY_NATAL 等） */
     private String businessType;

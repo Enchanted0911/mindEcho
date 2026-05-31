@@ -1,7 +1,7 @@
 {
   "navigationBarTitleText": "和盘",
-  "navigationBarBackgroundColor": "#080e1a",
-  "navigationBarTextStyle": "white",
-  "backgroundColor": "#080e1a",
+  "navigationBarBackgroundColor": "#f0f5ff",
+  "navigationBarTextStyle": "black",
+  "backgroundColor": "#f0f5ff",
   "usingComponents": {}
 }
