@@ -169,10 +169,10 @@ error: cannot find symbol
 
 ```java
 // ❌ 错误：import 类不存在
-import com.example.nonexistent.NonExistentClass;
+import com.myapp.nonexistent.NonExistentClass;
 
 // ✅ 正确：import 真实存在的类
-import com.example.application.course.domain.model.CourseDO;
+import com.myapp.application.course.domain.model.CourseDO;
 ```
 
 ### 2. 字段不存在错误

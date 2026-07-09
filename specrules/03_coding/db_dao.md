@@ -88,12 +88,12 @@ public class CourseDAOImpl implements CourseDAO {
 
     @Override
     public Course selectById(Long id) {
-        MAssert.notNull(id, "ID不能为空");
+        Objects.requireNonNull(id, "ID不能为空");
         try {
             return courseMapper.selectByPrimaryKey(id);
         } catch (Exception e) {
             logger.error("根据ID查询失败, id: {}", id, e);
-            throw new BaseRuntimeException("根据ID查询失败", e);
+            throw new RuntimeException("根据ID查询失败", e);
         }
     }
 
@@ -104,14 +104,14 @@ public class CourseDAOImpl implements CourseDAO {
             return courseMapper.selectByExample(example);
         } catch (Exception e) {
             logger.error("根据条件查询失败, condition: {}", condition, e);
-            throw new BaseRuntimeException("根据条件查询失败", e);
+            throw new RuntimeException("根据条件查询失败", e);
         }
     }
 
     @Override
     public int insert(Course course) {
-        MAssert.notNull(course, "课程对象不能为空");
-        MAssert.notBlank(course.getRegion(), "地区不能为空");
+        Objects.requireNonNull(course, "课程对象不能为空");
+        Objects.requireNonNull(course.getRegion(), "地区不能为空");
 
         try {
             long currentTime = System.currentTimeMillis();
@@ -121,27 +121,27 @@ public class CourseDAOImpl implements CourseDAO {
             return courseMapper.insertSelective(course);
         } catch (Exception e) {
             logger.error("插入课程失败, course: {}", course, e);
-            throw new BaseRuntimeException("插入课程失败", e);
+            throw new RuntimeException("插入课程失败", e);
         }
     }
 
     @Override
     public int updateById(Course course) {
-        MAssert.notNull(course, "课程对象不能为空");
-        MAssert.notNull(course.getId(), "课程ID不能为空");
+        Objects.requireNonNull(course, "课程对象不能为空");
+        Objects.requireNonNull(course.getId(), "课程ID不能为空");
 
         try {
             course.setUtime(System.currentTimeMillis());
             return courseMapper.updateByPrimaryKeySelective(course);
         } catch (Exception e) {
             logger.error("更新课程失败, course: {}", course, e);
-            throw new BaseRuntimeException("更新课程失败", e);
+            throw new RuntimeException("更新课程失败", e);
         }
     }
 
     @Override
     public int deleteById(Long id) {
-        MAssert.notNull(id, "ID不能为空");
+        Objects.requireNonNull(id, "ID不能为空");
 
         try {
             Course course = new Course();
@@ -151,7 +151,7 @@ public class CourseDAOImpl implements CourseDAO {
             return courseMapper.updateByPrimaryKeySelective(course);
         } catch (Exception e) {
             logger.error("删除课程失败, id: {}", id, e);
-            throw new BaseRuntimeException("删除课程失败", e);
+            throw new RuntimeException("删除课程失败", e);
         }
     }
 
@@ -237,7 +237,7 @@ public class CourseDAOImpl implements CourseDAO {
 
     @Override
     public int deleteById(Long id) {
-        MAssert.notNull(id, "ID不能为空");
+        Objects.requireNonNull(id, "ID不能为空");
 
         try {
             Course course = new Course();
@@ -248,13 +248,13 @@ public class CourseDAOImpl implements CourseDAO {
             return courseMapper.updateByPrimaryKeySelective(course);
         } catch (Exception e) {
             logger.error("删除课程失败, id: {}", id, e);
-            throw new BaseRuntimeException("删除课程失败", e);
+            throw new RuntimeException("删除课程失败", e);
         }
     }
 
     @Override
     public int insert(Course course) {
-        MAssert.notNull(course, "课程对象不能为空");
+        Objects.requireNonNull(course, "课程对象不能为空");
 
         try {
             long currentTime = System.currentTimeMillis();
@@ -265,7 +265,7 @@ public class CourseDAOImpl implements CourseDAO {
             return courseMapper.insertSelective(course);
         } catch (Exception e) {
             logger.error("插入课程失败, course: {}", course, e);
-            throw new BaseRuntimeException("插入课程失败", e);
+            throw new RuntimeException("插入课程失败", e);
         }
     }
 

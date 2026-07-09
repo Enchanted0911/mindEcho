@@ -56,9 +56,9 @@ public interface MerchantGrowthRpcService {
 
 **统一返回对象**（REST API 与 RPC 均需遵守）：
 
-- 普通接口使用 `com.example.commons.api.ResultWrapper<T>`
-- 分页接口使用 `com.example.business.commons.langs.BasePageResultDTO<T>`
-- 分页信息使用 `com.example.business.commons.langs.PageDTO` 对象（`BasePageResultDTO` 内部通过 `PageDTO` 承载
+- 普通接口使用 `ResultWrapper<T>`
+- 分页接口使用 `BasePageResultDTO<T>`
+- 分页信息使用 `PageDTO` 对象（`BasePageResultDTO` 内部通过 `PageDTO` 承载
   pageNum/pageSize/total 等分页元信息，调用 `BasePageResultDTO.success(list, pageNum, pageSize, total)`
   时框架自动填充，开发者无需手动构造）
 - **禁止返回 `ResultWrapper<Void>`**：无业务数据（void 语义）的接口应返回 `ResultWrapper<Boolean>`，例如仅表示成功/失败的写操作

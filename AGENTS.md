@@ -7,7 +7,6 @@
 > 若两者在**步骤编排**上冲突，以 `feature-dev-manager-agent` 为准；若涉及业务事实、代码现状、接口定义，以仓库实际文件为准。
 > `spec/template/STATUS-TEMPLATE.md` 是 `STATUS.md` 的模板来源；feature manager 创建或修复 `STATUS.md` 时应优先读取该文件。
 > `spec/template/FEATURE-TEMPLATE.md` 是 `FEATURE.md` 的模板来源；`prd-analyzer-agent` 负责沉淀 feature 原始需求、PRD 理解摘要、待确定内容和澄清问题。
-> Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
 > **任何规模进入代码修改前都必须人工确认**；标准流程还必须在设计文档与自动审查通过后执行方案人工确认。
 
 ---
@@ -23,7 +22,7 @@
 | 「修改」「调整」「不满意」「重新做」「回退」「变更」 | 变更请求 | → 变更请求流程（见第六节） |
 | 「查看现状」「影响分析」「改动范围」「哪些地方会受影响」 | 独立分析 | → 直接调用 `context-analyzer-agent` |
 | 「查架构」「当前模块」「系统结构」「README」 | 架构查阅 | → 直接调用 `readme-architecture-curator` |
-| 「规范」「specrules」「架构不清楚」「文档」 | 规范查询 | → MCP 调用 Documentation Agent 查文档 |
+| 「规范」「specrules」「架构不清楚」「文档」 | 规范查询 | → 直接读取 specrules/ 相关文档 |
 
 ---
 

@@ -109,11 +109,11 @@ public class TaskDO {
     public void publish() {
         // 业务规则校验
         if (TaskStatusEnum.PUBLISHED.value().equals(this.status)) {
-            throw new BaseRuntimeException("任务已发布，不能重复发布");
+            throw new RuntimeException("任务已发布，不能重复发布");
         }
         
         if (!TaskStatusEnum.DRAFT.value().equals(this.status)) {
-            throw new BaseRuntimeException("只有草稿状态的任务才能发布");
+            throw new RuntimeException("只有草稿状态的任务才能发布");
         }
         
         // 状态流转
@@ -125,7 +125,7 @@ public class TaskDO {
      */
     public void archive() {
         if (TaskStatusEnum.ARCHIVED.value().equals(this.status)) {
-            throw new BaseRuntimeException("任务已归档");
+            throw new RuntimeException("任务已归档");
         }
         
         this.status = TaskStatusEnum.ARCHIVED.value();
@@ -304,12 +304,12 @@ public class TaskDomainServiceImpl implements TaskDomainService {
         // 1. 查询任务
         TaskDO taskDO = taskRepository.getByCodeAndRegion(taskCode, region);
         if (taskDO == null) {
-            throw new BaseRuntimeException("任务不存在");
+            throw new RuntimeException("任务不存在");
         }
         
         // 2. 验证规则完整性
         if (!validateTaskRules(taskDO)) {
-            throw new BaseRuntimeException("任务规则不完整，不能发布");
+            throw new RuntimeException("任务规则不完整，不能发布");
         }
         
         // 3. 状态流转（领域对象行为）
@@ -349,7 +349,7 @@ public class TaskDomainServiceImpl implements TaskDomainService {
                 taskDO.getTaskCode(), taskDO.getRegion());
         
         if (existingTask != null) {
-            throw new BaseRuntimeException("任务编码已存在: " + taskDO.getTaskCode());
+            throw new RuntimeException("任务编码已存在: " + taskDO.getTaskCode());
         }
     }
 }

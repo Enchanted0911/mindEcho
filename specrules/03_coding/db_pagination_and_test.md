@@ -155,7 +155,7 @@ public BasePageResultDTO<AuditListResponse> getAuditList(AuditListRequest reques
                 pageResultBO.getPageSize(),
                 pageResultBO.getTotal()
         );
-    } catch (BaseRuntimeException e) {
+    } catch (RuntimeException e) {
         return BasePageResultDTO.error(e.getCode(), e.getMessage());
     } catch (Exception e) {
         return BasePageResultDTO.error(CommonErrorCodeEnum.SYSTEM_ERROR.getCode(), "system error,please retry");

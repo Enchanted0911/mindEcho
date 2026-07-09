@@ -104,9 +104,15 @@ public class TaskBO {
      * 参数校验
      */
     public void doCheck() {
-        MAssert.notBlank(taskCode, "任务编码不能为空");
-        MAssert.notBlank(taskName, "任务名称不能为空");
-        MAssert.notBlank(region, "地区不能为空");
+        if (!org.apache.commons.lang3.StringUtils.isNotBlank(taskCode)) {
+            throw new IllegalArgumentException("任务编码不能为空");
+        }
+        if (!org.apache.commons.lang3.StringUtils.isNotBlank(taskName)) {
+            throw new IllegalArgumentException("任务名称不能为空");
+        }
+        if (!org.apache.commons.lang3.StringUtils.isNotBlank(region)) {
+            throw new IllegalArgumentException("地区不能为空");
+        }
     }
 }
 
@@ -161,7 +167,7 @@ public class TaskDO {
      */
     public void publish() {
         if (TaskStatusEnum.PUBLISHED.value().equals(this.status)) {
-            throw new BaseRuntimeException("任务已发布");
+            throw new RuntimeException("任务已发布");
         }
         this.status = TaskStatusEnum.PUBLISHED.value();
     }

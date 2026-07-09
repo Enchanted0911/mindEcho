@@ -80,9 +80,9 @@ spring:
       isolation.level: read_committed
       properties:
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
-        spring.json.trusted.packages: com.example.events
+        spring.json.trusted.packages: com.myapp.events
         spring.json.type.mapping: >
-          orderPlaced:com.example.events.OrderPlacedEvent
+          orderPlaced:com.myapp.events.OrderPlacedEvent
         max.poll.interval.ms: 300000        # 必须超过最坏情况处理时长
         max.poll.records: 500
         heartbeat.interval.ms: 3000
@@ -415,7 +415,7 @@ topics:
     "specversion": "1.0",
     "id": "a234-1234-1234",
     "source": "/orders/order-service",
-    "type": "com.example.orders.order.created",
+    "type": "com.myapp.orders.order.created",
     "subject": "order-12345",
     "datacontenttype": "application/json",
     "time": "2026-07-09T10:30:00Z",
@@ -433,7 +433,7 @@ topics:
 CloudEvent event = CloudEventBuilder.v1()
     .withId(UUID.randomUUID().toString())
     .withSource(URI.create("/orders/order-service"))
-    .withType("com.example.orders.order.created")
+    .withType("com.myapp.orders.order.created")
     .withSubject(order.id())
     .withDataContentType("application/json")
     .withData(objectMapper.writeValueAsBytes(order))

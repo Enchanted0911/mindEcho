@@ -161,7 +161,7 @@ public static AuditStatus getByValue(Integer value) {
 import java.util.Objects;
 import java.util.Arrays;
 import java.util.stream.Collectors;
-import com.example.business.commons.enums.IntValueEnum;
+import com.myapp.commons.enums.IntValueEnum;
 ```
 
 ## 检查清单

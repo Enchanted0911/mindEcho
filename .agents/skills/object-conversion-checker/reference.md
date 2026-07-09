@@ -20,7 +20,7 @@
 
 ## @Data 与 Lombok 使用说明
 
-- 项目内 Mafka DTO、部分 Request/Response、领域 Request 已使用 `@Data`（及 `@Builder`、`@AllArgsConstructor`、`@NoArgsConstructor`）。
+- 项目内消息队列 DTO、部分 Request/Response、领域 Request 已使用 `@Data`（及 `@Builder`、`@AllArgsConstructor`、`@NoArgsConstructor`）。
 - 纯数据载体类（DTO/VO/BO/DO/Entity/消息体）在无特殊框架约束时，推荐统一使用 `@Data` 去掉手写 getter/setter。
 - 若类上已有 `@Data`，则不应再保留手写 `getXxx()`/`setXxx()`，避免重复与冲突。
 - 使用 @Data 后，**BO/DO 上的业务转换方法**（如 `toXxxDO()`、`fromXxxDO()`、`toXxxEntity()`）仍保留在类内，不删除。

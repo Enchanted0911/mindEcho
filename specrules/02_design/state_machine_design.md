@@ -171,11 +171,11 @@ public class TaskDO {
     public void publish() {
         // 1. 状态校验
         if (TaskStatusEnum.PUBLISHED.value().equals(this.status)) {
-            throw new BaseRuntimeException("任务已发布，不能重复发布");
+            throw new RuntimeException("任务已发布，不能重复发布");
         }
         
         if (!TaskStatusEnum.DRAFT.value().equals(this.status)) {
-            throw new BaseRuntimeException(
+            throw new RuntimeException(
                 String.format("只有草稿状态的任务才能发布，当前状态：%s", 
                     TaskStatusEnum.getByValue(this.status).desc())
             );
@@ -193,11 +193,11 @@ public class TaskDO {
      */
     public void start() {
         if (TaskStatusEnum.RUNNING.value().equals(this.status)) {
-            throw new BaseRuntimeException("任务已在运行中");
+            throw new RuntimeException("任务已在运行中");
         }
         
         if (!TaskStatusEnum.PUBLISHED.value().equals(this.status)) {
-            throw new BaseRuntimeException("只有已发布的任务才能启动");
+            throw new RuntimeException("只有已发布的任务才能启动");
         }
         
         this.status = TaskStatusEnum.RUNNING.value();
@@ -211,11 +211,11 @@ public class TaskDO {
      */
     public void pause() {
         if (TaskStatusEnum.PAUSED.value().equals(this.status)) {
-            throw new BaseRuntimeException("任务已暂停");
+            throw new RuntimeException("任务已暂停");
         }
         
         if (!TaskStatusEnum.RUNNING.value().equals(this.status)) {
-            throw new BaseRuntimeException("只有运行中的任务才能暂停");
+            throw new RuntimeException("只有运行中的任务才能暂停");
         }
         
         this.status = TaskStatusEnum.PAUSED.value();
@@ -229,11 +229,11 @@ public class TaskDO {
      */
     public void archive() {
         if (TaskStatusEnum.ARCHIVED.value().equals(this.status)) {
-            throw new BaseRuntimeException("任务已归档");
+            throw new RuntimeException("任务已归档");
         }
         
         if (TaskStatusEnum.DRAFT.value().equals(this.status)) {
-            throw new BaseRuntimeException("草稿状态的任务不能归档，请直接删除");
+            throw new RuntimeException("草稿状态的任务不能归档，请直接删除");
         }
         
         this.status = TaskStatusEnum.ARCHIVED.value();
@@ -311,12 +311,12 @@ public class TaskDomainServiceImpl implements TaskDomainService {
         // 1. 查询任务
         TaskDO taskDO = taskRepository.getByCodeAndRegion(taskCode, region);
         if (taskDO == null) {
-            throw new BaseRuntimeException("任务不存在");
+            throw new RuntimeException("任务不存在");
         }
         
         // 2. 业务规则校验
         if (!validateTaskRules(taskDO)) {
-            throw new BaseRuntimeException("任务规则不完整，不能发布");
+            throw new RuntimeException("任务规则不完整，不能发布");
         }
         
         // 3. 状态流转（调用DO的行为方法）
@@ -383,12 +383,12 @@ public class TaskDO {
     public void publish(String operator) {
         // 1. 权限校验（可选，也可在DomainService中做）
         if (!hasPublishPermission(operator)) {
-            throw new BaseRuntimeException("无权限发布任务");
+            throw new RuntimeException("无权限发布任务");
         }
         
         // 2. 状态校验
         if (!TaskStatusEnum.DRAFT.value().equals(this.status)) {
-            throw new BaseRuntimeException("只有草稿状态的任务才能发布");
+            throw new RuntimeException("只有草稿状态的任务才能发布");
         }
         
         // 3. 状态流转
@@ -414,7 +414,7 @@ public void publish() {
     
     // 状态校验和流转
     if (!TaskStatusEnum.DRAFT.value().equals(this.status)) {
-        throw new BaseRuntimeException("状态流转失败：当前状态不允许发布");
+        throw new RuntimeException("状态流转失败：当前状态不允许发布");
     }
     
     this.status = TaskStatusEnum.PUBLISHED.value();
@@ -490,7 +490,7 @@ public void testPublishTask_WhenNotDraft_ShouldThrowException() {
     taskDO.setStatus(TaskStatusEnum.RUNNING.value());
     
     // 2. 执行并验证异常
-    assertThrows(BaseRuntimeException.class, () -> {
+    assertThrows(RuntimeException.class, () -> {
         taskDO.publish();
     });
 }

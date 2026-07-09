@@ -263,27 +263,28 @@ public void testWithMultipleStaticClasses() {
 
 ```java
 // 规则：要么全部使用具体值，要么全部使用匹配器
-try (MockedStatic<MAssert> mock = mockStatic(MAssert.class)) {
+// 规则：使用 Objects.requireNonNull 直接校验，无需 Mock 标准库方法
+    // ✅ 正确：直接使用 Objects.requireNonNull 进行验证
+    Objects.requireNonNull(param, "参数不能为null");
     
-    // ✅ 正确：使用 Answer 处理不同调用场景
-    mock.when(() -> MAssert.notNull(any(), anyString())).thenAnswer(invocation -> {
-        Object firstArg = invocation.getArgument(0);
-        if (firstArg == null) {
-            throw new BaseRuntimeException("参数不能为null");
-        }
-        return null;
-    });
-    
-    // 测试逻辑
-}
+    // 或使用 if-throw 模式手动校验
+    if (!org.apache.commons.lang3.StringUtils.isNotBlank(param)) {
+        throw new IllegalArgumentException("参数不能为空");
+    }
 ```
 
 ### ❌ 错误的参数匹配
 
 ```java
-// ❌ 错误：混合使用具体值和匹配器
-mock.when(() -> MAssert.notNull(param, anyString())).thenReturn(null);
-//                                      ↑ 混合！
+// ❌ 错误：Mock 标准 JDK 方法（Objects.requireNonNull 是 final 方法，不应 Mock）
+// ✅ 正确做法：直接验证参数值，无需 Mock
+Object param = null;
+try {
+    Objects.requireNonNull(param, "参数不能为null");
+    fail("应抛出 NullPointerException");
+} catch (NullPointerException e) {
+    // 预期异常
+}
 ```
 
 ---

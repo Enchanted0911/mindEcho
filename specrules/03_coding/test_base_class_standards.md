@@ -32,8 +32,8 @@ version: "1.0.0"
 **具体示例**：
 
 ```
-example-course-domain/src/test/java/com/example/application/course/domain/UnitTestBase.java
-example-course-application/src/test/java/com/example/application/course/application/UnitTestBase.java
+example-course-domain/src/test/java/com/myapp/application/course/domain/UnitTestBase.java
+example-course-application/src/test/java/com/myapp/application/course/application/UnitTestBase.java
 ```
 
 ### 初始化流程
@@ -41,7 +41,7 @@ example-course-application/src/test/java/com/example/application/course/applicat
 **第一步：检查基类是否存在**
 
 1. 打开当前模块的 `src/test/java` 目录
-2. 导航至对应的包路径（通常是 `com.example.application.{module}.domain` 或 `application`）
+2. 导航至对应的包路径（通常是 `com.myapp.application.{module}.domain` 或 `application`）
 3. 检查是否存在 `UnitTestBase.java` 文件
 
 **第二步：如果不存在，创建基类**
@@ -124,7 +124,7 @@ public abstract class UnitTestBase {
 **Domain 层测试示例**：
 
 ```java
-package com.example.application.course.domain;
+package com.myapp.application.course.domain;
 
 import org.junit.Test;
 import org.mockito.Mock;
@@ -144,7 +144,7 @@ public class CourseDomainServiceImplTest extends UnitTestBase {
 **Application 层测试示例**：
 
 ```java
-package com.example.application.course.application;
+package com.myapp.application.course.application;
 
 import org.junit.Test;
 import org.mockito.InjectMocks;
@@ -180,13 +180,13 @@ public class CourseAppServiceImplTest extends UnitTestBase {
 **标准路径**：
 
 ```
-{module}-infrastructure/src/test/java/com/example/application/{module}/infrastructure/TransactionTestBase.java
+{module}-infrastructure/src/test/java/com/myapp/application/{module}/infrastructure/TransactionTestBase.java
 ```
 
 **具体示例**：
 
 ```
-example-course-infrastructure/src/test/java/com/example/application/course/infrastructure/TransactionTestBase.java
+example-course-infrastructure/src/test/java/com/myapp/application/course/infrastructure/TransactionTestBase.java
 ```
 
 ### 关键特性
@@ -201,7 +201,7 @@ example-course-infrastructure/src/test/java/com/example/application/course/infra
 ### 标准使用示例
 
 ```java
-package com.example.application.course.infrastructure;
+package com.myapp.application.course.infrastructure;
 
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -221,9 +221,9 @@ public abstract class TransactionTestBase {
 ### 外部依赖 Mock 配置
 
 ```java
-package com.example.application.course.infrastructure;
+package com.myapp.application.course.infrastructure;
 
-import com.example.credit.api.RiskInfoMultiService;
+import com.myapp.credit.api.RiskInfoMultiService;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.annotation.Rollback;
@@ -247,7 +247,7 @@ public abstract class TransactionTestBase {
     private RiskInfoMultiService riskInfoMultiService;
 
     @MockBean(name = "courseIndexSyncProducer")
-    private com.example.messaging.api.IProducerProcessor courseIndexSyncProducer;
+    private com.myapp.messaging.api.IProducerProcessor courseIndexSyncProducer;
 }
 ```
 

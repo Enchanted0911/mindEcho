@@ -8,14 +8,6 @@
 
   // ── MCP servers ──
   "mcp": {
-    "context7": {
-      "type": "remote",
-      "url": "https://mcp.context7.com/mcp",
-      "headers": {
-        "CONTEXT7_API_KEY": "ctx7sk-4ad15d0d-253a-4e4c-a4e9-ec1bd368e04f"
-      },
-      "enabled": true
-    },
     "playwright": {
       "type": "local",
       "command": ["npx", "-y", "@playwright/mcp"],

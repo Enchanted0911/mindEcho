@@ -209,7 +209,7 @@ public class MerchantRecordDAOImpl implements MerchantRecordDAO {
         } else if ("SG".equals(entity.getRegion())) {
             return sgMapper.insertSelective(entity);
         } else {
-            throw new BaseRuntimeException("不支持的地区: " + entity.getRegion());
+            throw new RuntimeException("不支持的地区: " + entity.getRegion());
         }
     }
 }
@@ -299,7 +299,7 @@ public class TaskDomainServiceImpl implements TaskDomainService {
                 taskDO.getRegion(), taskDO.getTaskCode());
         redisTemplate.opsForValue().set(
                 cacheKey, 
-                JSON.toJSONString(updatedTaskDO), 
+                objectMapper.writeValueAsString(updatedTaskDO), 
                 1, TimeUnit.HOURS
         );
         
@@ -313,7 +313,7 @@ public class TaskDomainServiceImpl implements TaskDomainService {
         String cachedValue = redisTemplate.opsForValue().get(cacheKey);
         
         if (cachedValue != null) {
-            return JSON.parseObject(cachedValue, TaskDO.class);
+            return objectMapper.readValue(cachedValue, TaskDO.class);
         }
         
         // 2. 缓存未命中，查询数据库
@@ -323,7 +323,7 @@ public class TaskDomainServiceImpl implements TaskDomainService {
         if (taskDO != null) {
             redisTemplate.opsForValue().set(
                     cacheKey, 
-                    JSON.toJSONString(taskDO), 
+                    objectMapper.writeValueAsString(taskDO), 
                     1, TimeUnit.HOURS
             );
         }
@@ -500,7 +500,7 @@ public class TaskEntity {
 public int updateByVersion(TaskEntity entity) {
     int rows = taskMapper.updateByVersion(entity);
     if (rows == 0) {
-        throw new BaseRuntimeException("数据已被其他用户修改，请刷新后重试");
+        throw new RuntimeException("数据已被其他用户修改，请刷新后重试");
     }
     return rows;
 }

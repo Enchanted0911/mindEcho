@@ -147,10 +147,10 @@ mvn test-compile
 
 ```java
 // ❌ 错误：import 不存在的类
-import com.example.nonexistent.NonExistentClass;
+import com.myapp.nonexistent.NonExistentClass;
 
 // ✅ 正确：import 真实存在的类
-import com.example.application.course.domain.model.CourseDO;
+import com.myapp.application.course.domain.model.CourseDO;
 ```
 
 ### 3.3 字段存在性检查

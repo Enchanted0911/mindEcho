@@ -47,7 +47,7 @@ springdoc:
     try-it-out-enabled: true
     syntax-highlight:
       theme: monokai
-  packages-to-scan: com.example.api
+  packages-to-scan: com.myapp.api
   cache:
     disabled: true                       # 开发时禁用缓存
   show-actuator: false

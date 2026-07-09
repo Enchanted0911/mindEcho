@@ -104,7 +104,6 @@ graph TD
   - 上游服务研发
   - 下游依赖研发
   - 数据组
-  - TSP 订单组
   - 开放平台
 - ✅ **4.2 业务流程图**: 必须包含流程图/时序图/泳道图/状态图
 - ✅ **4.3 核心数据模型**: 必须包含 ER 图和表结构设计
@@ -173,7 +172,7 @@ TaskGroupShopCalEvent
 | 上游服务研发 | 是否列出依赖的上游系统研发负责人 | 接口联调可能失败 |
 | 下游依赖研发 | 是否列出调用本系统的下游研发负责人 | 接口变更可能遗漏通知 |
 | 数据组 | 是否周知数据组（表结构变更） | 数据组无法提前准备 |
-| TSP 订单组 | 是否周知 TSP（订单字段变更） | 数据同步可能异常 |
+
 | 开放平台 | 是否评估对开放平台影响 | 外部服务商可能受影响 |
 
 ### 4. Diagram Completeness Check
@@ -327,7 +326,7 @@ Expected Table:
 | 上游服务研发 | ... | 已填写 | ... | ... | ... |
 | 下游依赖研发 | ... | 已填写 | ... | ... | ... |
 | 数据组 | ... | 已填写 | ... | ... | ... |
-| TSP订单 | ... | 已填写 | ... | ... | ... |
+
 | 开放平台 | ... | 已填写 | ... | ... | ... |
 
 Validation:
@@ -486,7 +485,7 @@ Output Format:
 
 | 章节 | 问题类型 | 描述 | 建议 |
 |------|----------|------|------|
-| 4.1 干系方 | 缺失信息 | TSP 订单组未填写干系人姓名 | 联系 TSP 组确认负责人 |
+| 4.1 干系方 | 缺失信息 | 干系方信息不完整 | 联系相关人员确认负责人 |
 | 4.5.8 资金安全监控 | 章节缺失 | 本需求涉及权益发放，需评估资金安全监控 | 添加资金安全监控表，填写监控规则 |
 | 5.2 测试建议 | 内容不足 | 仅列出核心功能测试，未提供性能测试建议 | 补充性能测试要求（如 100w 商家 < 2 小时） |
 
@@ -499,7 +498,7 @@ Output Format:
 - **Section 2.1 - Business Concerns**: 10/10 ✅
 - **Section 2.2 - Technical Concerns**: 10/10 ✅
 - **Section 3 - Architecture Design**: 0/10 ❌ (Critical Violation)
-- **Section 4.1 - Stakeholders**: 8/10 ⚠️  (TSP 未填写)
+- **Section 4.1 - Stakeholders**: 8/10 ⚠️
 - **Section 4.2 - Process Diagram**: 10/10 ✅
 - **Section 4.3 - Data Model**: 10/10 ✅
 - **Section 4.4 - Interface Definition**: 10/10 ✅
@@ -529,7 +528,7 @@ Output Format:
 
 ### ⚠️  Priority 2 (HIGH - Must Fix Before Implementation)
 1. **Complete Stakeholder Table**:
-   - Action: Fill in TSP 订单组 contact person
+   - Action: Fill in all stakeholder contact persons
    - Timeline: Within 1 day
 
 2. **Add Financial Safety Monitoring**:
@@ -546,7 +545,7 @@ Output Format:
 ## 📋 Review Checklist for Next Iteration
 
 - [ ] Fix critical inter-system call violation
-- [ ] Complete TSP stakeholder information
+- [ ] Complete all stakeholder information
 - [ ] Add Section 4.5.8 financial safety monitoring
 - [ ] Enhance performance test recommendations
 - [ ] Re-run @design-doc-reviewer-agent for re-approval

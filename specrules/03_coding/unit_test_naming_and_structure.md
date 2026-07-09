@@ -56,10 +56,10 @@ version: "1.0.0"
 
 ```
 被测试类包结构：
-  com.example.application.course.domain.service.impl
+  com.myapp.application.course.domain.service.impl
   
 对应测试包结构：
-  com.example.application.course.domain.service.impl  // ✅ 完全相同
+  com.myapp.application.course.domain.service.impl  // ✅ 完全相同
 ```
 
 ### 具体示例
@@ -69,7 +69,7 @@ version: "1.0.0"
 ```
 源代码：
   example-course-domain/src/main/java/
-    com/example/application/course/domain/
+    com/myapp/application/course/domain/
       service/
         ├─ CourseDomainService.java (接口)
         └─ impl/
@@ -77,7 +77,7 @@ version: "1.0.0"
 
 测试代码：
   example-course-domain/src/test/java/
-    com/example/application/course/domain/
+    com/myapp/application/course/domain/
       service/impl/
         └─ CourseDomainServiceImplTest.java  ✅ 包结构完全对应
 ```
@@ -87,7 +87,7 @@ version: "1.0.0"
 ```
 源代码：
   example-course-application/src/main/java/
-    com/example/application/course/application/
+    com/myapp/application/course/application/
       service/
         ├─ CourseAppService.java (接口)
         └─ impl/
@@ -95,7 +95,7 @@ version: "1.0.0"
 
 测试代码：
   example-course-application/src/test/java/
-    com/example/application/course/application/
+    com/myapp/application/course/application/
       service/impl/
         └─ CourseAppServiceImplTest.java  ✅ 包结构完全对应
 ```
@@ -105,13 +105,13 @@ version: "1.0.0"
 ```
 源代码：
   example-course-infrastructure/src/main/java/
-    com/example/application/course/infrastructure/
+    com/myapp/application/course/infrastructure/
       repository/
         └─ CourseRepositoryImpl.java
 
 测试代码：
   example-course-infrastructure/src/test/java/
-    com/example/application/course/infrastructure/
+    com/myapp/application/course/infrastructure/
       repository/
         └─ CourseRepositoryImplTest.java  ✅ 包结构完全对应
 ```
@@ -206,7 +206,7 @@ public void testBatchDelete_ZeroItems() {
 
 ```java
 // ✅ 正确：清晰表达异常场景
-@Test(expected = BaseRuntimeException.class)
+@Test(expected = RuntimeException.class)
 public void testCreateCourse_ThrowException() {
     // 测试代码
 }
@@ -292,7 +292,7 @@ public void testCreateCourse_Success() {
 #### 异常场景
 
 ```java
-@Test(expected = BaseRuntimeException.class)
+@Test(expected = RuntimeException.class)
 public void testCreateCourse_InvalidParam() {
     // Given
     CourseBO input = new CourseBO();  // 空对象，缺少必要字段
@@ -326,7 +326,7 @@ public void testQueryCourses_EmptyResult() {
 ### Domain 层单元测试示例
 
 ```java
-package com.example.application.course.domain.service.impl;
+package com.myapp.application.course.domain.service.impl;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -369,7 +369,7 @@ public class CourseDomainServiceImplTest extends UnitTestBase {
         verify(courseRepository, times(1)).insert(any(CourseDO.class));
     }
 
-    @Test(expected = BaseRuntimeException.class)
+    @Test(expected = RuntimeException.class)
     public void testCreateCourse_InvalidParam() {
         // Given
         CourseDO invalidCourse = new CourseDO();
@@ -384,7 +384,7 @@ public class CourseDomainServiceImplTest extends UnitTestBase {
 ### Application 层单元测试示例
 
 ```java
-package com.example.application.course.application.service.impl;
+package com.myapp.application.course.application.service.impl;
 
 import org.junit.Test;
 import org.mockito.InjectMocks;

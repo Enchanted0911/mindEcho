@@ -98,7 +98,7 @@ public final class TaskDTOConverter {
 
 ### 3. 参数校验规范
 
-在用户接口层进行接口参数的基本校验。**禁止使用 Bean Validation 注解（`@Valid`、`@NotNull`、`@NotBlank` 等）**，统一使用代码方式校验（如 `MAssert`、`Preconditions`、手动 if 判断）。
+在用户接口层进行接口参数的基本校验。**禁止使用 Bean Validation 注解（`@Valid`、`@NotNull`、`@NotBlank` 等）**，统一使用代码方式校验（如 `Objects.requireNonNull`、`StringUtils.isNotBlank`、手动 if 判断）。
 
 **REST API 普通接口实现示例**：
 
@@ -117,9 +117,13 @@ public class MerchantGrowthGatewayServiceImpl implements MerchantGrowthGatewaySe
         log.info("创建任务请求: {}", request);
         
         // 1. 参数校验（代码方式）
-        MAssert.notBlank(request.getTaskCode(), "任务编码不能为空");
-        MAssert.notBlank(request.getTaskName(), "任务名称不能为空");
-        MAssert.notNull(request.getRegion(), "地区不能为空");
+        if (!org.apache.commons.lang3.StringUtils.isNotBlank(request.getTaskCode())) {
+            throw new IllegalArgumentException("任务编码不能为空");
+        }
+        if (!org.apache.commons.lang3.StringUtils.isNotBlank(request.getTaskName())) {
+            throw new IllegalArgumentException("任务名称不能为空");
+        }
+        Objects.requireNonNull(request.getRegion(), "地区不能为空");
         
         // 2. DTO → BO 转换（静态 Converter）
         TaskBO taskBO = TaskDTOConverter.request2BO(request);
@@ -162,7 +166,7 @@ public BasePageResultDTO<TaskListResponse> pageTask(TaskListRequest request) {
                 pageResultBO.getPageSize(),
                 pageResultBO.getTotal()
         );
-    } catch (BaseRuntimeException e) {
+    } catch (RuntimeException e) {
         return BasePageResultDTO.error(e.getCode(), e.getMessage());
     } catch (Exception e) {
         return BasePageResultDTO.error(CommonErrorCodeEnum.SYSTEM_ERROR.getCode(), "system error,please retry");
@@ -209,8 +213,8 @@ starter/
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     
-    @ExceptionHandler(BaseRuntimeException.class)
-    public Result<Void> handleBusinessException(BaseRuntimeException e) {
+    @ExceptionHandler(RuntimeException.class)
+    public Result<Void> handleBusinessException(RuntimeException e) {
         log.error("业务异常", e);
         return Result.error(e.getCode(), e.getMessage());
     }

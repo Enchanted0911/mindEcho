@@ -26,8 +26,7 @@
 
 ### 2.2 Mermaid / 图示表达
 
-- **Mermaid 图表生成**：调用 `mermaid_chart_generator` skill，规范在
-  `packages/skills/mermaid_chart_generator/reference.md`
+- **Mermaid 图表生成**：调用 `mermaid_chart_generator` skill
 
 ### 2.3 设计阶段常见追加专题
 
@@ -66,8 +65,8 @@
 - **对象转换**: [对象转换规范](specrules/03_coding/object_conversion_standards.md)
 - **工具类 / JSON**: [JSON 工具规范](specrules/03_coding/jsonutils.md)
 - **集合判空 / 集合操作**: [集合操作规范](specrules/03_coding/collection_standards.md)
-- **ConfigCenter 配置与 region 读取**: [ConfigCenter 配置规范](specrules/03_coding/lion_config.md)
-- **TaskScheduler / 定时任务**: [TaskScheduler 任务规范](specrules/03_coding/crane_task_standards.md)
+- **配置与 region 读取**: [应用配置规范](specrules/03_coding/config_management.md) — 外部化配置 key 定义与 region 隔离读取
+- **定时任务**: [定时任务调度规范](specrules/03_coding/task_scheduling.md) — @Scheduled / Quartz / K8s CronJob 与幂等性
 - **线程池（Resilience）**: [线程池规范](specrules/03_coding/thread_pool_standards.md)
 
 ### 3.3 交付质量
@@ -88,7 +87,7 @@
   **: [数据对象命名](specrules/00_general/naming/data_object_naming.md)、[对象转换规范](specrules/03_coding/object_conversion_standards.md)
 - **接口定义 / 返回值 / 参数对象化
   **: [API 层标准](specrules/00_general/architecture/api_layer_standards.md)、[API 文档规范](specrules/03_coding/api_documentation_standards.md)
-- **ConfigCenter 配置与 region 读取**: [ConfigCenter 配置规范](specrules/03_coding/lion_config.md)
+- **配置与 region 读取**: [应用配置规范](specrules/03_coding/config_management.md)
 
 ---
 
@@ -158,7 +157,8 @@ specrules/
 │   └── state_machine_design.md
 ├── 03_coding/                  # 开发阶段规范
 │   ├── api_documentation_standards.md
-│   ├── crane_task_standards.md
+│   ├── config_management.md
+│   ├── task_scheduling.md
 │   ├── thread_pool_standards.md
 │   ├── db_table_design.md
 │   ├── db_dao.md
@@ -169,7 +169,6 @@ specrules/
 │   ├── dependency_injection_core.md    # 含循环依赖、最小依赖、单测注入
 │   ├── object_conversion_standards.md
 │   ├── collection_standards.md
-│   ├── lion_config.md
 │   ├── unit_test_technology_stack.md
 │   ├── unit_test_naming_and_structure.md
 │   ├── unit_test_compilation_standards.md

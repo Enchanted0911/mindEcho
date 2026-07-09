@@ -6,7 +6,7 @@ spring:
     password: 19980913
   ai:
     openai:
-      api-key: sk-6be74f49615e4e35b70e57c23e6582e7
+      api-key: test
   cache:
     type: redis
   data:
@@ -17,8 +17,8 @@ spring:
       timeout: 2000
 
 wechat:
-  appid: wx6381a586894836a5
-  secret: d43dab6aa489e3fd258a5494efd847df
+  appid: test
+  secret: test
   pay:
     mch-id: "1690000000"
     api-v3-key: "Kf3dP9xQ7vZ2mN8wT1yR4uE6bL0sJ5cA"

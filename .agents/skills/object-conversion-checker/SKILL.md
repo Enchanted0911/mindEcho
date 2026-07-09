@@ -10,8 +10,8 @@ version: "1.0.0"
 
 ## 1. 何时使用本 Skill
 
-- 审查或编写 **Converter**、**BO**、**DO**、**Entity**、DTO/VO 时
-- 用户要求「检查对象转化」「BO 转 DO」「DO 转 Entity」「用 @Data 去掉 get/set」时
+- 审查或编写 **Converter**、**BO**、**DO**、**Entity**、DTO/VO、**Kafka 消息体** 时
+- 用户要求「检查对象转化」「BO 转 DO」「DO 转 Entity」「Kafka 消息转换」「用 @Data 去掉 get/set」时
 - 提交前做转换与数据类风格一致性检查时
 
 ## 2. 转换职责检查清单
@@ -50,12 +50,12 @@ version: "1.0.0"
 - **BO**（仅作数据传递、无复杂校验逻辑时）
 - **DO**（仅作领域数据载体、转换逻辑在 `toXxxEntity()` 等内时）
 - **Entity**（与表结构一一对应）
-- **Mafka/外部消息体**（如 `TaskCalcResultMessage`、事件 DTO）
+- **消息队列/外部消息体**（如事件 DTO）
 
 ### 3.2 检查项
 
 - [ ] 若类为纯数据载体（仅字段 + 可选构造器/Builder），且无「必须手写 getter/setter」的框架约束，则应使用 **`@Data`**（或按需 `@Getter`/`@Setter`），**删除手写 getXxx/setXxx**
-- [ ] 若需不可变或 Builder，可配合 `@Builder`、`@AllArgsConstructor`、`@NoArgsConstructor`（与项目现有 Mafka DTO、Request 风格一致）
+- [ ] 若需不可变或 Builder，可配合 `@Builder`、`@AllArgsConstructor`、`@NoArgsConstructor`（与项目现有 DTO、Request 风格一致）
 - [ ] 保留 **转换方法**（如 `toXxxDO()`、`fromXxxDO()`、`toXxxEntity()`）在 BO/DO 内，不因使用 @Data 而删除
 
 ### 3.3 示例（符合规范）
