@@ -5,7 +5,6 @@
 > 在 OpenCode 中，若当前 session 主 agent 为 `feature-dev-manager-agent`，则它是 feature / fix / 设计 / 任务规划 / 变更 / 开发执行 / 完成流程的**唯一运行时编排入口**。
 > 本文件负责说明“项目希望发生什么”；`feature-dev-manager-agent` 负责说明“运行时具体怎么一步步执行”。
 > 若两者在**步骤编排**上冲突，以 `feature-dev-manager-agent` 为准；若涉及业务事实、代码现状、接口定义，以仓库实际文件为准。
-> Claude Code plugin runtime agents 通常通过 `workspace-toolkit:*` 提供；Cursor / legacy direct-render 场景才会落在 `.cursor/agents/` 或 `.claude/agents/`。
 > `spec/template/STATUS-TEMPLATE.md` 是 `STATUS.md` 的模板来源；feature manager 创建或修复 `STATUS.md` 时应优先读取该文件。
 > `spec/template/FEATURE-TEMPLATE.md` 是 `FEATURE.md` 的模板来源；`prd-analyzer-agent` 负责沉淀 feature 原始需求、PRD 理解摘要、待确定内容和澄清问题。
 > Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
@@ -295,8 +294,8 @@ specrules/ 下文件变更
 ```
 spec/
 ├── template/
-│   ├── FEATURE-TEMPLATE.md    ← workspace-toolkit 同步提供的 Feature 语义模板
-│   └── STATUS-TEMPLATE.md     ← workspace-toolkit 同步提供的状态模板
+│   ├── FEATURE-TEMPLATE.md    ← Feature 语义模板
+│   └── STATUS-TEMPLATE.md     ← 状态模板
 └── {feature}/
     ├── FEATURE.md                 ← prd-analyzer-agent
     ├── context-report.md          ← context-analyzer-agent
@@ -360,7 +359,6 @@ When closing out ANY feature branch, the docs-curator closure step is MANDATORY.
 | `object-conversion-checker` | DTO/BO/DO 转换检查 | dev-task-executor-agent（按需） |
 | `enum_design_agent` | 枚举设计与实现 | dev-task-executor-agent（按需） |
 | `work_item_splitter` | PRD→工作项清单 | feature-dev-manager-agent（可选） |
-| `workspace-toolkit` | 工作空间初始化与环境同步 | 用户手动（新建/同步工作空间时） |
 
 ---
 

@@ -2,7 +2,7 @@
 
 项目级规范目录。存放本项目特有的编码约定和命名特例，补充或覆盖 `specrules/` 中的全局规范。
 
-- **不被 workspace-toolkit 覆盖**：此目录由项目团队自行维护，workspace-toolkit 同步不会修改这里的内容。
+- **项目团队自行维护**：此目录由项目团队自行维护。
 - **跟随项目代码**：随项目 git 仓库版本管理。
 - **加载时机**：所有 agent 在完成全局规范加载（specrules/rules/index.md）后，自动追加读取 `project-rules.md`（若存在）。
 
