@@ -1,0 +1,33 @@
+# 开发环境配置 - 仅覆盖主配置中需要修改的项
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mindecho?stringtype=unspecified
+    username: wujunsheng
+    password: 19980913
+  ai:
+    openai:
+      api-key: sk-6be74f49615e4e35b70e57c23e6582e7
+  cache:
+    type: redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 2000
+
+wechat:
+  appid: wx6381a586894836a5
+  secret: d43dab6aa489e3fd258a5494efd847df
+  pay:
+    mch-id: "1690000000"
+    api-v3-key: "Kf3dP9xQ7vZ2mN8wT1yR4uE6bL0sJ5cA"
+    cert-serial-no: "4B3C2A1D9E8F7G6H5I4J3K2L1M0N9O8P7Q6R5S4"
+    private-key: "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7placeholder"
+    platform-cert: "MIIEHTCCAgWgAwIBAgIUplaceholderCertSerialAgIBADANBgkqhkiG9"
+    notify-url: "https://your-dev-domain.com/api/payment/wx-callback"
+
+astrology:
+  python-service:
+    base-url: "http://localhost:8000"
+

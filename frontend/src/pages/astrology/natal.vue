@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {computed, onMounted, reactive, ref} from 'vue'
-import {getNatalChart, interpretNatal, type NatalChartResponse} from '../../api/astrology'
-import {updateBirthInfo} from '../../api/auth'
-import {useUserStore} from '../../store/user'
+import {getNatalChart, interpretNatal, type NatalChartResponse} from '@/api/astrology'
+import {updateBirthInfo} from '@/api/auth'
+import {useUserStore} from '@/store/user'
 
 const userStore = useUserStore()
 
@@ -57,22 +57,15 @@ function hasBirthInfo(): boolean {
   return !!(info?.birthCity && info?.birthTime)
 }
 
-// ── 构建出生信息展示文本 ─────────────────────────────────
-function getBirthInfoDisplay(): string {
-  const info = userStore.userInfo
-  if (!info?.birthCity || !info?.birthTime) return '未设置'
-  return `${info.birthTime} · ${info.birthCity}`
-}
-
 // ── onMounted：初始化 ────────────────────────────────────
-onMounted(() => {
-  // 如果有出生信息，默认展示本命盘主页；否则进入设置页
-  if (hasBirthInfo()) {
-    step.value = 'form'
-  } else {
-    // 没有出生信息，先进入设置页
-    initEditFormFromStore()
-    step.value = 'birthEdit'
+onMounted(async () => {
+  // 始终从 form 步骤开始（不再自动跳到 birthEdit）
+  // 如果有出生信息且后端有缓存的本命盘，自动加载
+  step.value = 'form'
+  const astroInfo = userStore.astrologyInfo
+  if (hasBirthInfo() && astroInfo?.hasNatalCache) {
+    // 静默加载已有缓存的本命盘
+    await calculateChart()
   }
 })
 
@@ -328,45 +321,357 @@ function onMinuteChange(e: any) { editForm.minute = Number(MINUTE_OPTIONS[e.deta
 // ── 城市搜索逻辑 ──────────────────────────────────────────
 
 const MAJOR_CITIES = [
-  { name: '北京', lat: 39.9042, lng: 116.4074, address: '北京市' },
-  { name: '上海', lat: 31.2304, lng: 121.4737, address: '上海市' },
-  { name: '广州', lat: 23.1291, lng: 113.2644, address: '广东省广州市' },
-  { name: '深圳', lat: 22.5431, lng: 114.0579, address: '广东省深圳市' },
-  { name: '杭州', lat: 30.2741, lng: 120.1551, address: '浙江省杭州市' },
-  { name: '成都', lat: 30.5728, lng: 104.0668, address: '四川省成都市' },
-  { name: '重庆', lat: 29.5630, lng: 106.5516, address: '重庆市' },
-  { name: '武汉', lat: 30.5928, lng: 114.3055, address: '湖北省武汉市' },
-  { name: '西安', lat: 34.3416, lng: 108.9398, address: '陕西省西安市' },
-  { name: '南京', lat: 32.0603, lng: 118.7969, address: '江苏省南京市' },
-  { name: '天津', lat: 39.3434, lng: 117.3616, address: '天津市' },
-  { name: '苏州', lat: 31.2989, lng: 120.5853, address: '江苏省苏州市' },
-  { name: '郑州', lat: 34.7473, lng: 113.6249, address: '河南省郑州市' },
-  { name: '长沙', lat: 28.2278, lng: 112.9388, address: '湖南省长沙市' },
-  { name: '沈阳', lat: 41.8057, lng: 123.4315, address: '辽宁省沈阳市' },
-  { name: '青岛', lat: 36.0671, lng: 120.3826, address: '山东省青岛市' },
-  { name: '济南', lat: 36.6512, lng: 117.1201, address: '山东省济南市' },
-  { name: '大连', lat: 38.9140, lng: 121.6147, address: '辽宁省大连市' },
-  { name: '厦门', lat: 24.4798, lng: 118.0894, address: '福建省厦门市' },
-  { name: '福州', lat: 26.0745, lng: 119.2965, address: '福建省福州市' },
-  { name: '宁波', lat: 29.8683, lng: 121.5440, address: '浙江省宁波市' },
-  { name: '无锡', lat: 31.4912, lng: 120.3119, address: '江苏省无锡市' },
-  { name: '合肥', lat: 31.8206, lng: 117.2272, address: '安徽省合肥市' },
-  { name: '昆明', lat: 25.0453, lng: 102.7097, address: '云南省昆明市' },
-  { name: '哈尔滨', lat: 45.8038, lng: 126.5349, address: '黑龙江省哈尔滨市' },
-  { name: '长春', lat: 43.8171, lng: 125.3235, address: '吉林省长春市' },
-  { name: '南昌', lat: 28.6820, lng: 115.8582, address: '江西省南昌市' },
-  { name: '贵阳', lat: 26.6470, lng: 106.6302, address: '贵州省贵阳市' },
-  { name: '南宁', lat: 22.8170, lng: 108.3665, address: '广西壮族自治区南宁市' },
-  { name: '呼和浩特', lat: 40.8414, lng: 111.7519, address: '内蒙古自治区呼和浩特市' },
-  { name: '乌鲁木齐', lat: 43.8256, lng: 87.6168, address: '新疆维吾尔自治区乌鲁木齐市' },
-  { name: '拉萨', lat: 29.6500, lng: 91.1000, address: '西藏自治区拉萨市' },
-  { name: '银川', lat: 38.4872, lng: 106.2309, address: '宁夏回族自治区银川市' },
-  { name: '西宁', lat: 36.6177, lng: 101.7782, address: '青海省西宁市' },
-  { name: '兰州', lat: 36.0611, lng: 103.8343, address: '甘肃省兰州市' },
-  { name: '太原', lat: 37.8706, lng: 112.5489, address: '山西省太原市' },
-  { name: '石家庄', lat: 38.0428, lng: 114.5149, address: '河北省石家庄市' },
-  { name: '海口', lat: 20.0440, lng: 110.1991, address: '海南省海口市' },
+  // 直辖市
+  { name: '北京', lat: 39.9042, lng: 116.4074, address: '北京市', pinyin: 'beijing bj' },
+  { name: '上海', lat: 31.2304, lng: 121.4737, address: '上海市', pinyin: 'shanghai sh' },
+  { name: '天津', lat: 39.3434, lng: 117.3616, address: '天津市', pinyin: 'tianjin tj' },
+  { name: '重庆', lat: 29.5630, lng: 106.5516, address: '重庆市', pinyin: 'chongqing cq' },
+  // 广东省
+  { name: '广州', lat: 23.1291, lng: 113.2644, address: '广东省广州市', pinyin: 'guangzhou gz' },
+  { name: '深圳', lat: 22.5431, lng: 114.0579, address: '广东省深圳市', pinyin: 'shenzhen sz' },
+  { name: '东莞', lat: 23.0207, lng: 113.7518, address: '广东省东莞市', pinyin: 'dongguan dg' },
+  { name: '佛山', lat: 23.0219, lng: 113.1219, address: '广东省佛山市', pinyin: 'foshan fs' },
+  { name: '珠海', lat: 22.2711, lng: 113.5767, address: '广东省珠海市', pinyin: 'zhuhai zh' },
+  { name: '惠州', lat: 23.1115, lng: 114.4152, address: '广东省惠州市', pinyin: 'huizhou hz' },
+  { name: '中山', lat: 22.5176, lng: 113.3926, address: '广东省中山市', pinyin: 'zhongshan zs' },
+  { name: '江门', lat: 22.5788, lng: 113.0819, address: '广东省江门市', pinyin: 'jiangmen jm' },
+  { name: '湛江', lat: 21.2707, lng: 110.3594, address: '广东省湛江市', pinyin: 'zhanjiang zj' },
+  { name: '汕头', lat: 23.3535, lng: 116.6820, address: '广东省汕头市', pinyin: 'shantou st' },
+  { name: '潮州', lat: 23.6567, lng: 116.6226, address: '广东省潮州市', pinyin: 'chaozhou cz' },
+  { name: '揭阳', lat: 23.5497, lng: 116.3724, address: '广东省揭阳市', pinyin: 'jieyang jy' },
+  { name: '茂名', lat: 21.6631, lng: 110.9253, address: '广东省茂名市', pinyin: 'maoming mm' },
+  { name: '肇庆', lat: 23.0470, lng: 112.4653, address: '广东省肇庆市', pinyin: 'zhaoqing zq' },
+  { name: '梅州', lat: 24.2882, lng: 116.1225, address: '广东省梅州市', pinyin: 'meizhou mz' },
+  { name: '清远', lat: 23.6820, lng: 113.0563, address: '广东省清远市', pinyin: 'qingyuan qy' },
+  { name: '河源', lat: 23.7435, lng: 114.6979, address: '广东省河源市', pinyin: 'heyuan hy' },
+  { name: '阳江', lat: 21.8581, lng: 111.9822, address: '广东省阳江市', pinyin: 'yangjiang yj' },
+  { name: '云浮', lat: 22.9151, lng: 112.0445, address: '广东省云浮市', pinyin: 'yunfu yf' },
+  { name: '韶关', lat: 24.8107, lng: 113.5975, address: '广东省韶关市', pinyin: 'shaoguan sg' },
+  { name: '汕尾', lat: 22.7748, lng: 115.3756, address: '广东省汕尾市', pinyin: 'shanwei sw' },
+  // 浙江省
+  { name: '杭州', lat: 30.2741, lng: 120.1551, address: '浙江省杭州市', pinyin: 'hangzhou hz' },
+  { name: '宁波', lat: 29.8683, lng: 121.5440, address: '浙江省宁波市', pinyin: 'ningbo nb' },
+  { name: '温州', lat: 27.9938, lng: 120.6994, address: '浙江省温州市', pinyin: 'wenzhou wz' },
+  { name: '嘉兴', lat: 30.7522, lng: 120.7551, address: '浙江省嘉兴市', pinyin: 'jiaxing jx' },
+  { name: '湖州', lat: 30.8703, lng: 120.0869, address: '浙江省湖州市', pinyin: 'huzhou huz' },
+  { name: '绍兴', lat: 30.0023, lng: 120.5832, address: '浙江省绍兴市', pinyin: 'shaoxing sx' },
+  { name: '金华', lat: 29.0788, lng: 119.6474, address: '浙江省金华市', pinyin: 'jinhua jh' },
+  { name: '衢州', lat: 28.9359, lng: 118.8741, address: '浙江省衢州市', pinyin: 'quzhou qz' },
+  { name: '舟山', lat: 30.0361, lng: 122.1067, address: '浙江省舟山市', pinyin: 'zhoushan zs2' },
+  { name: '台州', lat: 28.6561, lng: 121.4206, address: '浙江省台州市', pinyin: 'taizhou tz' },
+  { name: '丽水', lat: 28.4677, lng: 119.9230, address: '浙江省丽水市', pinyin: 'lishui ls' },
+  // 江苏省
+  { name: '南京', lat: 32.0603, lng: 118.7969, address: '江苏省南京市', pinyin: 'nanjing nj' },
+  { name: '苏州', lat: 31.2989, lng: 120.5853, address: '江苏省苏州市', pinyin: 'suzhou sz2' },
+  { name: '无锡', lat: 31.4912, lng: 120.3119, address: '江苏省无锡市', pinyin: 'wuxi wx' },
+  { name: '常州', lat: 31.7744, lng: 119.9741, address: '江苏省常州市', pinyin: 'changzhou cz2' },
+  { name: '南通', lat: 31.9801, lng: 120.8944, address: '江苏省南通市', pinyin: 'nantong nt' },
+  { name: '扬州', lat: 32.3936, lng: 119.4127, address: '江苏省扬州市', pinyin: 'yangzhou yz' },
+  { name: '徐州', lat: 34.2044, lng: 117.2847, address: '江苏省徐州市', pinyin: 'xuzhou xz' },
+  { name: '镇江', lat: 32.1875, lng: 119.4253, address: '江苏省镇江市', pinyin: 'zhenjiang zj2' },
+  { name: '泰州', lat: 32.4547, lng: 119.9229, address: '江苏省泰州市', pinyin: 'taizhou2 tz2' },
+  { name: '盐城', lat: 33.3480, lng: 120.1631, address: '江苏省盐城市', pinyin: 'yancheng yc' },
+  { name: '淮安', lat: 33.5518, lng: 119.0214, address: '江苏省淮安市', pinyin: 'huaian ha' },
+  { name: '连云港', lat: 34.5965, lng: 119.2214, address: '江苏省连云港市', pinyin: 'lianyungang lyg' },
+  { name: '宿迁', lat: 33.9631, lng: 118.2750, address: '江苏省宿迁市', pinyin: 'suqian sq' },
+  // 四川省
+  { name: '成都', lat: 30.5728, lng: 104.0668, address: '四川省成都市', pinyin: 'chengdu cd' },
+  { name: '绵阳', lat: 31.4678, lng: 104.6796, address: '四川省绵阳市', pinyin: 'mianyang my' },
+  { name: '德阳', lat: 31.1270, lng: 104.3976, address: '四川省德阳市', pinyin: 'deyang dy' },
+  { name: '宜宾', lat: 28.7514, lng: 104.6426, address: '四川省宜宾市', pinyin: 'yibin yb' },
+  { name: '泸州', lat: 28.8718, lng: 105.4425, address: '四川省泸州市', pinyin: 'luzhou lz' },
+  { name: '南充', lat: 30.8368, lng: 106.1105, address: '四川省南充市', pinyin: 'nanchong nc' },
+  { name: '自贡', lat: 29.3390, lng: 104.7787, address: '四川省自贡市', pinyin: 'zigong zg' },
+  { name: '攀枝花', lat: 26.5824, lng: 101.7183, address: '四川省攀枝花市', pinyin: 'panzhihua pzh' },
+  { name: '广元', lat: 32.4355, lng: 105.8434, address: '四川省广元市', pinyin: 'guangyuan gy' },
+  { name: '遂宁', lat: 30.5331, lng: 105.5927, address: '四川省遂宁市', pinyin: 'suining sn' },
+  { name: '内江', lat: 29.5806, lng: 105.0585, address: '四川省内江市', pinyin: 'neijiang nj2' },
+  { name: '乐山', lat: 29.5527, lng: 103.7661, address: '四川省乐山市', pinyin: 'leshan ls2' },
+  { name: '眉山', lat: 30.0748, lng: 103.8486, address: '四川省眉山市', pinyin: 'meishan ms' },
+  { name: '雅安', lat: 29.9997, lng: 103.0015, address: '四川省雅安市', pinyin: 'yaan ya' },
+  { name: '巴中', lat: 31.8670, lng: 106.7478, address: '四川省巴中市', pinyin: 'bazhong bz' },
+  { name: '资阳', lat: 30.1221, lng: 104.6278, address: '四川省资阳市', pinyin: 'ziyang zy' },
+  // 湖北省
+  { name: '武汉', lat: 30.5928, lng: 114.3055, address: '湖北省武汉市', pinyin: 'wuhan wh' },
+  { name: '宜昌', lat: 30.6918, lng: 111.2864, address: '湖北省宜昌市', pinyin: 'yichang yc2' },
+  { name: '襄阳', lat: 32.0084, lng: 112.1223, address: '湖北省襄阳市', pinyin: 'xiangyang xy' },
+  { name: '荆州', lat: 30.3354, lng: 112.2396, address: '湖北省荆州市', pinyin: 'jingzhou jz' },
+  { name: '十堰', lat: 32.6292, lng: 110.7987, address: '湖北省十堰市', pinyin: 'shiyan sy2' },
+  { name: '黄石', lat: 30.2006, lng: 115.0387, address: '湖北省黄石市', pinyin: 'huangshi hs' },
+  { name: '鄂州', lat: 30.3916, lng: 114.8951, address: '湖北省鄂州市', pinyin: 'ezhou ez' },
+  { name: '孝感', lat: 30.9244, lng: 113.9161, address: '湖北省孝感市', pinyin: 'xiaogan xg' },
+  { name: '黄冈', lat: 30.4534, lng: 114.8722, address: '湖北省黄冈市', pinyin: 'huanggang hg' },
+  { name: '随州', lat: 31.6899, lng: 113.3826, address: '湖北省随州市', pinyin: 'suizhou sz3' },
+  // 湖南省
+  { name: '长沙', lat: 28.2278, lng: 112.9388, address: '湖南省长沙市', pinyin: 'changsha cs' },
+  { name: '株洲', lat: 27.8274, lng: 113.1340, address: '湖南省株洲市', pinyin: 'zhuzhou zz' },
+  { name: '湘潭', lat: 27.8295, lng: 112.9447, address: '湖南省湘潭市', pinyin: 'xiangtan xt' },
+  { name: '岳阳', lat: 29.3572, lng: 113.1289, address: '湖南省岳阳市', pinyin: 'yueyang yy' },
+  { name: '常德', lat: 29.0322, lng: 111.6986, address: '湖南省常德市', pinyin: 'changde cd2' },
+  { name: '衡阳', lat: 26.8933, lng: 112.5719, address: '湖南省衡阳市', pinyin: 'hengyang hy2' },
+  { name: '邵阳', lat: 27.2394, lng: 111.4678, address: '湖南省邵阳市', pinyin: 'shaoyang sy3' },
+  { name: '益阳', lat: 28.5539, lng: 112.3551, address: '湖南省益阳市', pinyin: 'yiyang yy2' },
+  { name: '娄底', lat: 27.7003, lng: 111.9954, address: '湖南省娄底市', pinyin: 'loudi ld' },
+  { name: '郴州', lat: 25.7700, lng: 113.0148, address: '湖南省郴州市', pinyin: 'chenzhou cz3' },
+  { name: '永州', lat: 26.4202, lng: 111.6148, address: '湖南省永州市', pinyin: 'yongzhou yz2' },
+  { name: '怀化', lat: 27.5703, lng: 109.9588, address: '湖南省怀化市', pinyin: 'huaihua hh' },
+  { name: '张家界', lat: 29.1248, lng: 110.4791, address: '湖南省张家界市', pinyin: 'zhangjiajie zjj' },
+  // 福建省
+  { name: '福州', lat: 26.0745, lng: 119.2965, address: '福建省福州市', pinyin: 'fuzhou fz' },
+  { name: '厦门', lat: 24.4798, lng: 118.0894, address: '福建省厦门市', pinyin: 'xiamen xm' },
+  { name: '泉州', lat: 24.8741, lng: 118.6757, address: '福建省泉州市', pinyin: 'quanzhou qz2' },
+  { name: '漳州', lat: 24.5141, lng: 117.6472, address: '福建省漳州市', pinyin: 'zhangzhou zz2' },
+  { name: '莆田', lat: 25.4540, lng: 119.0073, address: '福建省莆田市', pinyin: 'putian pt' },
+  { name: '三明', lat: 26.2654, lng: 117.6386, address: '福建省三明市', pinyin: 'sanming sm' },
+  { name: '南平', lat: 26.6351, lng: 118.1786, address: '福建省南平市', pinyin: 'nanping np' },
+  { name: '龙岩', lat: 25.0751, lng: 117.0177, address: '福建省龙岩市', pinyin: 'longyan ly' },
+  { name: '宁德', lat: 26.6658, lng: 119.5479, address: '福建省宁德市', pinyin: 'ningde nd' },
+  // 山东省
+  { name: '济南', lat: 36.6512, lng: 117.1201, address: '山东省济南市', pinyin: 'jinan jn' },
+  { name: '青岛', lat: 36.0671, lng: 120.3826, address: '山东省青岛市', pinyin: 'qingdao qd' },
+  { name: '烟台', lat: 37.4638, lng: 121.4479, address: '山东省烟台市', pinyin: 'yantai yt' },
+  { name: '潍坊', lat: 36.7071, lng: 119.1616, address: '山东省潍坊市', pinyin: 'weifang wf' },
+  { name: '威海', lat: 37.5130, lng: 122.1219, address: '山东省威海市', pinyin: 'weihai wh2' },
+  { name: '淄博', lat: 36.8132, lng: 118.0549, address: '山东省淄博市', pinyin: 'zibo zb' },
+  { name: '临沂', lat: 35.1046, lng: 118.3564, address: '山东省临沂市', pinyin: 'linyi ly2' },
+  { name: '济宁', lat: 35.4146, lng: 116.5869, address: '山东省济宁市', pinyin: 'jining jn2' },
+  { name: '菏泽', lat: 35.2333, lng: 115.4800, address: '山东省菏泽市', pinyin: 'heze hz2' },
+  { name: '泰安', lat: 36.1996, lng: 117.0878, address: '山东省泰安市', pinyin: 'taian ta' },
+  { name: '东营', lat: 37.4343, lng: 118.6748, address: '山东省东营市', pinyin: 'dongying dy2' },
+  { name: '聊城', lat: 36.4562, lng: 115.9855, address: '山东省聊城市', pinyin: 'liaocheng lc' },
+  { name: '滨州', lat: 37.3836, lng: 117.9700, address: '山东省滨州市', pinyin: 'binzhou bz2' },
+  { name: '德州', lat: 37.4354, lng: 116.3592, address: '山东省德州市', pinyin: 'dezhou dz' },
+  { name: '枣庄', lat: 34.8107, lng: 117.3219, address: '山东省枣庄市', pinyin: 'zaozhuang zz3' },
+  { name: '日照', lat: 35.4164, lng: 119.5268, address: '山东省日照市', pinyin: 'rizhao rz' },
+  // 河南省
+  { name: '郑州', lat: 34.7473, lng: 113.6249, address: '河南省郑州市', pinyin: 'zhengzhou zz4' },
+  { name: '洛阳', lat: 34.6197, lng: 112.4540, address: '河南省洛阳市', pinyin: 'luoyang ly3' },
+  { name: '开封', lat: 34.7971, lng: 114.3075, address: '河南省开封市', pinyin: 'kaifeng kf' },
+  { name: '新乡', lat: 35.3028, lng: 113.9230, address: '河南省新乡市', pinyin: 'xinxiang xx' },
+  { name: '安阳', lat: 36.0975, lng: 114.3924, address: '河南省安阳市', pinyin: 'anyang ay' },
+  { name: '焦作', lat: 35.2395, lng: 113.2418, address: '河南省焦作市', pinyin: 'jiaozuo jz2' },
+  { name: '南阳', lat: 32.9905, lng: 112.5283, address: '河南省南阳市', pinyin: 'nanyang ny' },
+  { name: '许昌', lat: 34.0356, lng: 113.8522, address: '河南省许昌市', pinyin: 'xuchang xc' },
+  { name: '平顶山', lat: 33.7661, lng: 113.2914, address: '河南省平顶山市', pinyin: 'pingdingshan pds' },
+  { name: '信阳', lat: 32.1472, lng: 114.0913, address: '河南省信阳市', pinyin: 'xinyang xy2' },
+  { name: '周口', lat: 33.6477, lng: 114.6496, address: '河南省周口市', pinyin: 'zhoukou zk' },
+  { name: '驻马店', lat: 32.9826, lng: 114.0221, address: '河南省驻马店市', pinyin: 'zhumadian zmd' },
+  { name: '商丘', lat: 34.4143, lng: 115.6561, address: '河南省商丘市', pinyin: 'shangqiu sq2' },
+  { name: '濮阳', lat: 35.7620, lng: 115.0290, address: '河南省濮阳市', pinyin: 'puyang py' },
+  { name: '鹤壁', lat: 35.7474, lng: 114.2977, address: '河南省鹤壁市', pinyin: 'hebi hb' },
+  { name: '漯河', lat: 33.5757, lng: 114.0164, address: '河南省漯河市', pinyin: 'luohe lh' },
+  { name: '三门峡', lat: 34.7734, lng: 111.2010, address: '河南省三门峡市', pinyin: 'sanmenxia smx' },
+  // 辽宁省
+  { name: '沈阳', lat: 41.8057, lng: 123.4315, address: '辽宁省沈阳市', pinyin: 'shenyang sy' },
+  { name: '大连', lat: 38.9140, lng: 121.6147, address: '辽宁省大连市', pinyin: 'dalian dl' },
+  { name: '鞍山', lat: 41.1085, lng: 122.9958, address: '辽宁省鞍山市', pinyin: 'anshan as' },
+  { name: '抚顺', lat: 41.8797, lng: 123.9571, address: '辽宁省抚顺市', pinyin: 'fushun fs2' },
+  { name: '本溪', lat: 41.2856, lng: 123.7667, address: '辽宁省本溪市', pinyin: 'benxi bx' },
+  { name: '锦州', lat: 41.1305, lng: 121.1268, address: '辽宁省锦州市', pinyin: 'jinzhou jz3' },
+  { name: '营口', lat: 40.6672, lng: 122.2347, address: '辽宁省营口市', pinyin: 'yingkou yk' },
+  { name: '阜新', lat: 42.0215, lng: 121.6686, address: '辽宁省阜新市', pinyin: 'fuxin fx' },
+  { name: '辽阳', lat: 41.2694, lng: 123.2354, address: '辽宁省辽阳市', pinyin: 'liaoyang liay' },
+  { name: '盘锦', lat: 41.1209, lng: 122.0705, address: '辽宁省盘锦市', pinyin: 'panjin pj' },
+  { name: '铁岭', lat: 42.2861, lng: 123.8443, address: '辽宁省铁岭市', pinyin: 'tieling tl' },
+  { name: '朝阳', lat: 41.5754, lng: 120.4530, address: '辽宁省朝阳市', pinyin: 'chaoyang cyang' },
+  { name: '葫芦岛', lat: 40.7112, lng: 120.8369, address: '辽宁省葫芦岛市', pinyin: 'huludao hld' },
+  { name: '丹东', lat: 40.1292, lng: 124.3545, address: '辽宁省丹东市', pinyin: 'dandong dd' },
+  // 陕西省
+  { name: '西安', lat: 34.3416, lng: 108.9398, address: '陕西省西安市', pinyin: 'xian xa' },
+  { name: '咸阳', lat: 34.3297, lng: 108.7089, address: '陕西省咸阳市', pinyin: 'xianyang xy3' },
+  { name: '宝鸡', lat: 34.3617, lng: 107.2373, address: '陕西省宝鸡市', pinyin: 'baoji bj2' },
+  { name: '渭南', lat: 34.4997, lng: 109.5095, address: '陕西省渭南市', pinyin: 'weinan wn' },
+  { name: '汉中', lat: 33.0667, lng: 107.0282, address: '陕西省汉中市', pinyin: 'hanzhong hz3' },
+  { name: '榆林', lat: 38.2856, lng: 109.7342, address: '陕西省榆林市', pinyin: 'yulin yl' },
+  { name: '安康', lat: 32.6841, lng: 109.0293, address: '陕西省安康市', pinyin: 'ankang ak' },
+  { name: '延安', lat: 36.5853, lng: 109.4897, address: '陕西省延安市', pinyin: 'yanan yan' },
+  { name: '铜川', lat: 34.8969, lng: 108.9451, address: '陕西省铜川市', pinyin: 'tongchuan tc' },
+  { name: '商洛', lat: 33.8706, lng: 109.9196, address: '陕西省商洛市', pinyin: 'shangluo sl' },
+  // 安徽省
+  { name: '合肥', lat: 31.8206, lng: 117.2272, address: '安徽省合肥市', pinyin: 'hefei hf' },
+  { name: '芜湖', lat: 31.3520, lng: 118.4329, address: '安徽省芜湖市', pinyin: 'wuhu wh3' },
+  { name: '蚌埠', lat: 32.9162, lng: 117.3795, address: '安徽省蚌埠市', pinyin: 'bengbu bb' },
+  { name: '淮南', lat: 32.6252, lng: 116.9993, address: '安徽省淮南市', pinyin: 'huainan hn' },
+  { name: '马鞍山', lat: 31.6704, lng: 118.5066, address: '安徽省马鞍山市', pinyin: 'maanshan mas' },
+  { name: '淮北', lat: 33.9559, lng: 116.7954, address: '安徽省淮北市', pinyin: 'huaibei hb2' },
+  { name: '铜陵', lat: 30.9451, lng: 117.8119, address: '安徽省铜陵市', pinyin: 'tongling tl2' },
+  { name: '安庆', lat: 30.5430, lng: 117.0633, address: '安徽省安庆市', pinyin: 'anqing aq' },
+  { name: '黄山', lat: 29.7151, lng: 118.3380, address: '安徽省黄山市', pinyin: 'huangshan hs2' },
+  { name: '滁州', lat: 32.3025, lng: 118.3166, address: '安徽省滁州市', pinyin: 'chuzhou cz4' },
+  { name: '阜阳', lat: 32.8989, lng: 115.8149, address: '安徽省阜阳市', pinyin: 'fuyang fy' },
+  { name: '宿州', lat: 33.6464, lng: 116.9641, address: '安徽省宿州市', pinyin: 'suzhou sz4' },
+  { name: '六安', lat: 31.7347, lng: 116.5231, address: '安徽省六安市', pinyin: 'liuan la' },
+  { name: '亳州', lat: 33.8445, lng: 115.7797, address: '安徽省亳州市', pinyin: 'bozhou bz3' },
+  { name: '池州', lat: 30.6648, lng: 117.4898, address: '安徽省池州市', pinyin: 'chizhou cz5' },
+  { name: '宣城', lat: 30.9406, lng: 118.7592, address: '安徽省宣城市', pinyin: 'xuancheng xc2' },
+  // 河北省
+  { name: '石家庄', lat: 38.0428, lng: 114.5149, address: '河北省石家庄市', pinyin: 'shijiazhuang sjz' },
+  { name: '唐山', lat: 39.6310, lng: 118.1800, address: '河北省唐山市', pinyin: 'tangshan ts' },
+  { name: '秦皇岛', lat: 39.9355, lng: 119.5994, address: '河北省秦皇岛市', pinyin: 'qinhuangdao qhd' },
+  { name: '保定', lat: 38.8736, lng: 115.4644, address: '河北省保定市', pinyin: 'baoding bd' },
+  { name: '邯郸', lat: 36.6251, lng: 114.5389, address: '河北省邯郸市', pinyin: 'handan hd' },
+  { name: '邢台', lat: 37.0682, lng: 114.5048, address: '河北省邢台市', pinyin: 'xingtai xt2' },
+  { name: '张家口', lat: 40.8114, lng: 114.8796, address: '河北省张家口市', pinyin: 'zhangjiakou zjk' },
+  { name: '承德', lat: 40.9517, lng: 117.9626, address: '河北省承德市', pinyin: 'chengde cgd' },
+  { name: '沧州', lat: 38.3037, lng: 116.8388, address: '河北省沧州市', pinyin: 'cangzhou cgz' },
+  { name: '廊坊', lat: 39.5382, lng: 116.7032, address: '河北省廊坊市', pinyin: 'langfang lf' },
+  { name: '衡水', lat: 37.7357, lng: 115.6710, address: '河北省衡水市', pinyin: 'hengshui hs3' },
+  // 山西省
+  { name: '太原', lat: 37.8706, lng: 112.5489, address: '山西省太原市', pinyin: 'taiyuan ty' },
+  { name: '大同', lat: 40.0766, lng: 113.2982, address: '山西省大同市', pinyin: 'datong dt' },
+  { name: '阳泉', lat: 37.8579, lng: 113.5805, address: '山西省阳泉市', pinyin: 'yangquan yq' },
+  { name: '长治', lat: 36.1956, lng: 113.1164, address: '山西省长治市', pinyin: 'changzhi cz6' },
+  { name: '晋城', lat: 35.4906, lng: 112.8516, address: '山西省晋城市', pinyin: 'jincheng jc' },
+  { name: '朔州', lat: 39.3312, lng: 112.4328, address: '山西省朔州市', pinyin: 'shuozhou sz5' },
+  { name: '晋中', lat: 37.6872, lng: 112.7523, address: '山西省晋中市', pinyin: 'jinzhong jz4' },
+  { name: '运城', lat: 35.0224, lng: 111.0070, address: '山西省运城市', pinyin: 'yuncheng yc3' },
+  { name: '忻州', lat: 38.4164, lng: 112.7343, address: '山西省忻州市', pinyin: 'xinzhou xz2' },
+  { name: '临汾', lat: 36.0882, lng: 111.5189, address: '山西省临汾市', pinyin: 'linfen lf2' },
+  { name: '吕梁', lat: 37.5177, lng: 111.1437, address: '山西省吕梁市', pinyin: 'lvliang ll' },
+  // 黑龙江省
+  { name: '哈尔滨', lat: 45.8038, lng: 126.5349, address: '黑龙江省哈尔滨市', pinyin: 'haerbin hrb' },
+  { name: '齐齐哈尔', lat: 47.3479, lng: 123.9182, address: '黑龙江省齐齐哈尔市', pinyin: 'qiqihaer qqhr' },
+  { name: '大庆', lat: 46.5897, lng: 125.1032, address: '黑龙江省大庆市', pinyin: 'daqing dq' },
+  { name: '绥化', lat: 46.6537, lng: 126.9993, address: '黑龙江省绥化市', pinyin: 'suihua sh2' },
+  { name: '牡丹江', lat: 44.5526, lng: 129.6328, address: '黑龙江省牡丹江市', pinyin: 'mudanjiang mdj' },
+  { name: '佳木斯', lat: 46.7996, lng: 130.3751, address: '黑龙江省佳木斯市', pinyin: 'jiamusi jms' },
+  { name: '鸡西', lat: 45.2953, lng: 130.9694, address: '黑龙江省鸡西市', pinyin: 'jixi jx2' },
+  { name: '双鸭山', lat: 46.6430, lng: 131.1611, address: '黑龙江省双鸭山市', pinyin: 'shuangyashan sys' },
+  { name: '鹤岗', lat: 47.3488, lng: 130.2980, address: '黑龙江省鹤岗市', pinyin: 'hegang hg2' },
+  { name: '七台河', lat: 45.7708, lng: 131.0033, address: '黑龙江省七台河市', pinyin: 'qitaihe qth' },
+  { name: '黑河', lat: 50.2452, lng: 127.5287, address: '黑龙江省黑河市', pinyin: 'heihe hh2' },
+  { name: '伊春', lat: 47.7272, lng: 128.9100, address: '黑龙江省伊春市', pinyin: 'yichun yc4' },
+  // 吉林省
+  { name: '长春', lat: 43.8171, lng: 125.3235, address: '吉林省长春市', pinyin: 'changchun cc' },
+  { name: '吉林', lat: 43.8378, lng: 126.5496, address: '吉林省吉林市', pinyin: 'jilin jl' },
+  { name: '四平', lat: 43.1668, lng: 124.3504, address: '吉林省四平市', pinyin: 'siping sp' },
+  { name: '延吉', lat: 42.9099, lng: 129.5130, address: '吉林省延吉市', pinyin: 'yanji yj2' },
+  { name: '通化', lat: 41.7284, lng: 125.9393, address: '吉林省通化市', pinyin: 'tonghua th' },
+  { name: '白城', lat: 45.6199, lng: 122.8394, address: '吉林省白城市', pinyin: 'baicheng bc' },
+  { name: '松原', lat: 45.1415, lng: 124.8254, address: '吉林省松原市', pinyin: 'songyuan sy4' },
+  { name: '辽源', lat: 42.9023, lng: 125.1434, address: '吉林省辽源市', pinyin: 'liaoyuan ly4' },
+  { name: '白山', lat: 41.9395, lng: 126.4196, address: '吉林省白山市', pinyin: 'baishan bs' },
+  // 江西省
+  { name: '南昌', lat: 28.6820, lng: 115.8582, address: '江西省南昌市', pinyin: 'nanchang nc2' },
+  { name: '赣州', lat: 25.8311, lng: 114.9330, address: '江西省赣州市', pinyin: 'ganzhou gz2' },
+  { name: '九江', lat: 29.7055, lng: 115.9926, address: '江西省九江市', pinyin: 'jiujiang jj' },
+  { name: '景德镇', lat: 29.2687, lng: 117.1786, address: '江西省景德镇市', pinyin: 'jingdezhen jdz' },
+  { name: '萍乡', lat: 27.6238, lng: 113.8545, address: '江西省萍乡市', pinyin: 'pingxiang px' },
+  { name: '上饶', lat: 28.4544, lng: 117.9429, address: '江西省上饶市', pinyin: 'shangrao sr' },
+  { name: '吉安', lat: 27.1138, lng: 114.9924, address: '江西省吉安市', pinyin: 'jian ja' },
+  { name: '宜春', lat: 27.8138, lng: 114.4162, address: '江西省宜春市', pinyin: 'yichun2 yc5' },
+  { name: '抚州', lat: 27.9538, lng: 116.3583, address: '江西省抚州市', pinyin: 'fuzhou2 fz2' },
+  { name: '鹰潭', lat: 28.2600, lng: 117.0659, address: '江西省鹰潭市', pinyin: 'yingtan yt2' },
+  { name: '新余', lat: 27.8174, lng: 114.9168, address: '江西省新余市', pinyin: 'xinyu xy4' },
+  // 云南省
+  { name: '昆明', lat: 25.0453, lng: 102.7097, address: '云南省昆明市', pinyin: 'kunming km' },
+  { name: '曲靖', lat: 25.4897, lng: 103.7968, address: '云南省曲靖市', pinyin: 'qujing qj' },
+  { name: '玉溪', lat: 24.3520, lng: 102.5456, address: '云南省玉溪市', pinyin: 'yuxi yx' },
+  { name: '大理', lat: 25.6066, lng: 100.2598, address: '云南省大理市', pinyin: 'dali dl2' },
+  { name: '丽江', lat: 26.8721, lng: 100.2331, address: '云南省丽江市', pinyin: 'lijiang lj' },
+  { name: '保山', lat: 25.1121, lng: 99.1624, address: '云南省保山市', pinyin: 'baoshan bshan' },
+  { name: '昭通', lat: 27.3381, lng: 103.7172, address: '云南省昭通市', pinyin: 'zhaotong zt' },
+  { name: '文山', lat: 23.3688, lng: 104.2448, address: '云南省文山市', pinyin: 'wenshan ws' },
+  { name: '红河', lat: 23.3637, lng: 103.3748, address: '云南省红河州', pinyin: 'honghe hh3' },
+  { name: '西双版纳', lat: 22.0073, lng: 100.7974, address: '云南省西双版纳傣族自治州', pinyin: 'xishuangbanna xsbn' },
+  { name: '德宏', lat: 24.4316, lng: 98.5859, address: '云南省德宏傣族景颇族自治州', pinyin: 'dehong dhong' },
+  // 贵州省
+  { name: '贵阳', lat: 26.6470, lng: 106.6302, address: '贵州省贵阳市', pinyin: 'guiyang gy2' },
+  { name: '遵义', lat: 27.7251, lng: 106.9271, address: '贵州省遵义市', pinyin: 'zunyi zy2' },
+  { name: '毕节', lat: 27.3013, lng: 105.2919, address: '贵州省毕节市', pinyin: 'bijie bj3' },
+  { name: '铜仁', lat: 27.7299, lng: 109.1813, address: '贵州省铜仁市', pinyin: 'tongren tr' },
+  { name: '安顺', lat: 26.2453, lng: 105.9320, address: '贵州省安顺市', pinyin: 'anshun as2' },
+  { name: '六盘水', lat: 26.5838, lng: 104.8309, address: '贵州省六盘水市', pinyin: 'liupanshui lps' },
+  { name: '凯里', lat: 26.5683, lng: 107.9773, address: '贵州省凯里市', pinyin: 'kaili kl' },
+  { name: '兴义', lat: 25.0921, lng: 104.8945, address: '贵州省兴义市', pinyin: 'xingyi xy5' },
+  // 广西壮族自治区
+  { name: '南宁', lat: 22.8170, lng: 108.3665, address: '广西壮族自治区南宁市', pinyin: 'nanning nn' },
+  { name: '柳州', lat: 24.3264, lng: 109.4281, address: '广西壮族自治区柳州市', pinyin: 'liuzhou lz2' },
+  { name: '桂林', lat: 25.2736, lng: 110.2907, address: '广西壮族自治区桂林市', pinyin: 'guilin gl' },
+  { name: '玉林', lat: 22.6540, lng: 110.1642, address: '广西壮族自治区玉林市', pinyin: 'yulin2 yl2' },
+  { name: '梧州', lat: 23.4864, lng: 111.3133, address: '广西壮族自治区梧州市', pinyin: 'wuzhou wz2' },
+  { name: '北海', lat: 21.4808, lng: 109.1196, address: '广西壮族自治区北海市', pinyin: 'beihai bh' },
+  { name: '防城港', lat: 21.6861, lng: 108.3524, address: '广西壮族自治区防城港市', pinyin: 'fangchenggang fcg' },
+  { name: '钦州', lat: 21.9797, lng: 108.6543, address: '广西壮族自治区钦州市', pinyin: 'qinzhou qz3' },
+  { name: '贵港', lat: 23.1116, lng: 109.6019, address: '广西壮族自治区贵港市', pinyin: 'guigang gg' },
+  { name: '百色', lat: 23.9021, lng: 106.6180, address: '广西壮族自治区百色市', pinyin: 'baise bs2' },
+  { name: '来宾', lat: 23.7502, lng: 109.2266, address: '广西壮族自治区来宾市', pinyin: 'laibin lb' },
+  { name: '崇左', lat: 22.4156, lng: 107.3641, address: '广西壮族自治区崇左市', pinyin: 'chongzuo cz7' },
+  { name: '贺州', lat: 24.4140, lng: 111.5662, address: '广西壮族自治区贺州市', pinyin: 'hezhou hez' },
+  { name: '河池', lat: 24.6936, lng: 108.0852, address: '广西壮族自治区河池市', pinyin: 'hechi hc' },
+  // 海南省
+  { name: '海口', lat: 20.0440, lng: 110.1991, address: '海南省海口市', pinyin: 'haikou hk' },
+  { name: '三亚', lat: 18.2528, lng: 109.5119, address: '海南省三亚市', pinyin: 'sanya sy5' },
+  { name: '三沙', lat: 16.8299, lng: 112.3340, address: '海南省三沙市', pinyin: 'sansha ss' },
+  { name: '儋州', lat: 19.5198, lng: 109.5809, address: '海南省儋州市', pinyin: 'danzhou dz2' },
+  // 内蒙古自治区
+  { name: '呼和浩特', lat: 40.8414, lng: 111.7519, address: '内蒙古自治区呼和浩特市', pinyin: 'huhehaote hhht' },
+  { name: '包头', lat: 40.6575, lng: 109.8401, address: '内蒙古自治区包头市', pinyin: 'baotou bt' },
+  { name: '鄂尔多斯', lat: 39.6086, lng: 109.7814, address: '内蒙古自治区鄂尔多斯市', pinyin: 'eerduosi eeds' },
+  { name: '赤峰', lat: 42.2574, lng: 118.8881, address: '内蒙古自治区赤峰市', pinyin: 'chifeng cf' },
+  { name: '通辽', lat: 43.6520, lng: 122.2437, address: '内蒙古自治区通辽市', pinyin: 'tongliao tl3' },
+  { name: '乌兰察布', lat: 40.9938, lng: 113.1143, address: '内蒙古自治区乌兰察布市', pinyin: 'wulanchabu wlcb' },
+  { name: '巴彦淖尔', lat: 40.7448, lng: 107.3875, address: '内蒙古自治区巴彦淖尔市', pinyin: 'bayannaoer byne' },
+  { name: '呼伦贝尔', lat: 49.2116, lng: 119.7658, address: '内蒙古自治区呼伦贝尔市', pinyin: 'hulunbeier hlbe' },
+  // 新疆维吾尔自治区
+  { name: '乌鲁木齐', lat: 43.8256, lng: 87.6168, address: '新疆维吾尔自治区乌鲁木齐市', pinyin: 'wulumuqi wlmq' },
+  { name: '喀什', lat: 39.4673, lng: 75.9896, address: '新疆维吾尔自治区喀什地区', pinyin: 'kashi ks' },
+  { name: '克拉玛依', lat: 45.5800, lng: 84.8891, address: '新疆维吾尔自治区克拉玛依市', pinyin: 'kelamayi klmy' },
+  { name: '吐鲁番', lat: 42.9478, lng: 89.1837, address: '新疆维吾尔自治区吐鲁番市', pinyin: 'tulufan tlf' },
+  { name: '哈密', lat: 42.8176, lng: 93.5142, address: '新疆维吾尔自治区哈密市', pinyin: 'hami hm' },
+  { name: '和田', lat: 37.1102, lng: 79.9217, address: '新疆维吾尔自治区和田地区', pinyin: 'hetian ht' },
+  { name: '阿克苏', lat: 41.1681, lng: 80.2601, address: '新疆维吾尔自治区阿克苏地区', pinyin: 'akesu aks' },
+  { name: '伊宁', lat: 43.9074, lng: 81.3244, address: '新疆维吾尔自治区伊宁市', pinyin: 'yining yn' },
+  { name: '石河子', lat: 44.3059, lng: 86.0817, address: '新疆维吾尔自治区石河子市', pinyin: 'shihezi shz' },
+  { name: '库尔勒', lat: 41.7254, lng: 86.1525, address: '新疆维吾尔自治区库尔勒市', pinyin: 'kuerle kel' },
+  // 西藏自治区
+  { name: '拉萨', lat: 29.6500, lng: 91.1000, address: '西藏自治区拉萨市', pinyin: 'lasa ls3' },
+  { name: '日喀则', lat: 29.2677, lng: 88.8850, address: '西藏自治区日喀则市', pinyin: 'rikaze rkz' },
+  { name: '昌都', lat: 31.1423, lng: 97.1717, address: '西藏自治区昌都市', pinyin: 'changdu cd3' },
+  { name: '林芝', lat: 29.6490, lng: 94.3625, address: '西藏自治区林芝市', pinyin: 'linzhi lz3' },
+  { name: '山南', lat: 29.2280, lng: 91.7732, address: '西藏自治区山南市', pinyin: 'shannan sn2' },
+  { name: '那曲', lat: 31.4768, lng: 92.0513, address: '西藏自治区那曲市', pinyin: 'naqu nq' },
+  // 宁夏回族自治区
+  { name: '银川', lat: 38.4872, lng: 106.2309, address: '宁夏回族自治区银川市', pinyin: 'yinchuan yc6' },
+  { name: '石嘴山', lat: 38.9842, lng: 106.3895, address: '宁夏回族自治区石嘴山市', pinyin: 'shizuishan szs' },
+  { name: '吴忠', lat: 37.9974, lng: 106.1990, address: '宁夏回族自治区吴忠市', pinyin: 'wuzhong wz3' },
+  { name: '固原', lat: 36.0154, lng: 106.2424, address: '宁夏回族自治区固原市', pinyin: 'guyuan gy3' },
+  { name: '中卫', lat: 37.5200, lng: 105.1896, address: '宁夏回族自治区中卫市', pinyin: 'zhongwei zw' },
+  // 青海省
+  { name: '西宁', lat: 36.6177, lng: 101.7782, address: '青海省西宁市', pinyin: 'xining xn' },
+  { name: '海东', lat: 36.5024, lng: 102.1042, address: '青海省海东市', pinyin: 'haidong hd2' },
+  { name: '格尔木', lat: 36.4028, lng: 94.8984, address: '青海省格尔木市', pinyin: 'geermu gem' },
+  { name: '德令哈', lat: 37.3647, lng: 97.3617, address: '青海省德令哈市', pinyin: 'delingha dlh' },
+  // 甘肃省
+  { name: '兰州', lat: 36.0611, lng: 103.8343, address: '甘肃省兰州市', pinyin: 'lanzhou lz4' },
+  { name: '天水', lat: 34.5807, lng: 105.7245, address: '甘肃省天水市', pinyin: 'tianshui ts2' },
+  { name: '武威', lat: 37.9284, lng: 102.6340, address: '甘肃省武威市', pinyin: 'wuwei ww' },
+  { name: '酒泉', lat: 39.7432, lng: 98.4938, address: '甘肃省酒泉市', pinyin: 'jiuquan jq' },
+  { name: '张掖', lat: 38.9258, lng: 100.4450, address: '甘肃省张掖市', pinyin: 'zhangye zy3' },
+  { name: '庆阳', lat: 35.7093, lng: 107.6423, address: '甘肃省庆阳市', pinyin: 'qingyang qyang' },
+  { name: '平凉', lat: 35.5424, lng: 106.6654, address: '甘肃省平凉市', pinyin: 'pingliang pl' },
+  { name: '定西', lat: 35.5815, lng: 104.6268, address: '甘肃省定西市', pinyin: 'dingxi dx' },
+  { name: '陇南', lat: 33.4023, lng: 104.9236, address: '甘肃省陇南市', pinyin: 'longnan ln' },
+  { name: '嘉峪关', lat: 39.7867, lng: 98.2891, address: '甘肃省嘉峪关市', pinyin: 'jiayuguan jyg' },
+  { name: '金昌', lat: 38.5205, lng: 102.1879, address: '甘肃省金昌市', pinyin: 'jinchang jcg' },
+  { name: '白银', lat: 36.5446, lng: 104.1385, address: '甘肃省白银市', pinyin: 'baiyin by' },
+  // 港澳台
+  { name: '香港', lat: 22.3193, lng: 114.1694, address: '香港特别行政区', pinyin: 'xianggang hk2 hong kong' },
+  { name: '澳门', lat: 22.1987, lng: 113.5439, address: '澳门特别行政区', pinyin: 'aomen macao macau' },
+  { name: '台北', lat: 25.0478, lng: 121.5319, address: '台湾省台北市', pinyin: 'taibei tb' },
+  { name: '台中', lat: 24.1477, lng: 120.6736, address: '台湾省台中市', pinyin: 'taizhong tz3' },
+  { name: '高雄', lat: 22.6273, lng: 120.3014, address: '台湾省高雄市', pinyin: 'gaoxiong gx' },
+  { name: '台南', lat: 22.9908, lng: 120.2133, address: '台湾省台南市', pinyin: 'tainan tn' },
 ]
+
+// 城市别名映射（简称/别名 → 城市名，用于模糊搜索）
+const CITY_ALIASES: Record<string, string> = {
+  '京': '北京', '沪': '上海', '渝': '重庆', '津': '天津',
+  '穗': '广州', '深': '深圳', '杭': '杭州', '苏': '苏州',
+  '宁': '南京', '汉': '武汉', '蓉': '成都',
+  '锡': '无锡', '常': '常州', '扬': '扬州', '镇': '镇江',
+  '徐': '徐州', '通': '南通',
+}
 
 let searchTimer: any = null
 
@@ -388,9 +693,27 @@ function onCityInput(e: any) {
 }
 
 function searchCities(keyword: string) {
-  const matched = MAJOR_CITIES.filter(c =>
-    c.name.includes(keyword) || c.address?.includes(keyword)
-  ).slice(0, 6)
+  const kw = keyword.toLowerCase().trim()
+  if (!kw) {
+    citySearchResults.value = []
+    showCitySuggestions.value = false
+    return
+  }
+
+  // 检查是否是别名（单字简称匹配）
+  const aliasTarget = CITY_ALIASES[kw]
+
+  const matched = MAJOR_CITIES.filter(c => {
+    // 1. 城市名直接包含
+    if (c.name.includes(kw)) return true
+    // 2. 地址包含（支持省份搜索）
+    if (c.address?.includes(kw)) return true
+    // 3. 拼音匹配（全拼或缩写）
+    if (c.pinyin && c.pinyin.toLowerCase().includes(kw)) return true
+    // 4. 别名匹配
+    return !!(aliasTarget && c.name === aliasTarget)
+  }).slice(0, 8)
+
   citySearchResults.value = matched
   showCitySuggestions.value = matched.length > 0
 }
@@ -510,6 +833,16 @@ async function saveBirthInfo() {
     })
     // 同步到 userStore（后端已清空本命盘缓存）
     userStore.updateBirthInfo(editForm.city, editForm.lat, editForm.lng, birthTime)
+    // 更新 astrologyInfo：出生信息已变更，所有缓存失效
+    userStore.updateAstrologyCache({
+      birthCity: editForm.city,
+      birthLat: editForm.lat,
+      birthLng: editForm.lng,
+      birthTime,
+      hasNatalCache: false,
+      hasSynastryCache: false,
+      hasTransitCache: false,
+    })
     // 清空本地已有的本命盘结果（因为出生信息变了）
     chartData.value = null
     interpretation.value = ''
@@ -519,6 +852,15 @@ async function saveBirthInfo() {
   } catch (e) {
     // 本地更新（降级）
     userStore.updateBirthInfo(editForm.city, editForm.lat, editForm.lng, birthTime)
+    userStore.updateAstrologyCache({
+      birthCity: editForm.city,
+      birthLat: editForm.lat,
+      birthLng: editForm.lng,
+      birthTime,
+      hasNatalCache: false,
+      hasSynastryCache: false,
+      hasTransitCache: false,
+    })
     chartData.value = null
     interpretation.value = ''
     uni.showToast({ title: '保存失败，已本地更新', icon: 'none' })
@@ -561,22 +903,15 @@ async function calculateChart() {
 
   try {
     // 后端从 user 表读取出生信息，无需传参
-    const result = await getNatalChart()
-    chartData.value = result
+    chartData.value = await getNatalChart()
     step.value = 'result'
+    // 更新缓存标志位
+    userStore.updateAstrologyCache({ hasNatalCache: true })
   } catch (e: any) {
-    // 如果是出生信息未设置的错误（7001），跳转到设置页
+    // 如果是出生信息未设置的错误（7001），回到 form 展示友好占位
     if (e?.code === 7001 || e?.message?.includes('出生信息')) {
       step.value = 'form'
-      uni.showModal({
-        title: '未设置出生信息',
-        content: '请先设置出生信息再计算本命盘',
-        confirmText: '去设置',
-        cancelText: '取消',
-        success: (res) => {
-          if (res.confirm) openBirthEdit()
-        }
-      })
+      userStore.updateAstrologyCache({ hasNatalCache: false })
     } else {
       // 使用 mock 数据展示（开发阶段 Python 服务未启动时）
       chartData.value = { chart: null, summary: null, savedToProfile: false }
@@ -824,8 +1159,8 @@ function goInterpret() {
 
         <view v-else class="birth-info-empty" @click="openBirthEdit">
           <text class="birth-info-empty-icon">🌟</text>
-          <text class="birth-info-empty-text">点击设置出生信息</text>
-          <text class="birth-info-empty-sub">设置后才能计算本命盘</text>
+          <text class="birth-info-empty-text">尚未设置出生信息</text>
+          <text class="birth-info-empty-sub">点击此处填写，或在星盘首页统一设置</text>
         </view>
       </view>
 

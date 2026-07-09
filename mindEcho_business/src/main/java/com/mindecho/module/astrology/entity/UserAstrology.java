@@ -14,7 +14,7 @@ import java.util.UUID;
  * <p>字段分组：
  * <ul>
  *   <li>出生信息：birth_city / birth_lat / birth_lng / birth_time</li>
- *   <li>本命盘：natal_chart_data / natal_chart_summary / natal_interpretation</li>
+ * <li>本命盘：natal_chart_data / natal_interpretation</li>
  *   <li>和盘：synastry_chart_data / synastry_interpretation</li>
  *   <li>和盘对方信息（前端回填用）：synastry_partner_name / city / lat / lng / time</li>
  *   <li>流运：transit_chart_data / transit_interpretation / transit_target_date</li>
@@ -58,14 +58,6 @@ public class UserAstrology {
      */
     @TableField(value = "natal_chart_data", updateStrategy = FieldStrategy.IGNORED)
     private String natalChartData;
-
-    /**
-     * 本命盘 AI 摘要（JSON 格式）
-     *
-     * <p>updateStrategy = IGNORED：允许 updateById 将该字段更新为 null（清空缓存场景需要）
-     */
-    @TableField(value = "natal_chart_summary", updateStrategy = FieldStrategy.IGNORED)
-    private String natalChartSummary;
 
     /**
      * 本命盘 AI 解读文本（最近一次，TEXT）

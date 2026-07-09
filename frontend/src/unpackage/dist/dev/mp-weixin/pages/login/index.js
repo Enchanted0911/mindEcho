@@ -1,6 +1,7 @@
 "use strict";
 const common_vendor = require("../../common/vendor.js");
 const api_auth = require("../../api/auth.js");
+const api_astrology = require("../../api/astrology.js");
 const store_user = require("../../store/user.js");
 const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
   __name: "index",
@@ -30,9 +31,14 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         const response = await api_auth.wxLogin(loginResult.code);
         userStore.setToken(response.token);
         userStore.setUserInfo(response.userInfo);
+        api_astrology.getUserAstrologyInfo().then((info) => {
+          userStore.setAstrologyInfo(info);
+        }).catch((err) => {
+          common_vendor.index.__f__("warn", "at pages/login/index.vue:39", "[login] Failed to fetch astrology info:", err);
+        });
         common_vendor.index.switchTab({ url: "/pages/chat/index" });
       } catch (error) {
-        common_vendor.index.__f__("error", "at pages/login/index.vue:36", "Login error:", error);
+        common_vendor.index.__f__("error", "at pages/login/index.vue:43", "Login error:", error);
         const msg = (error == null ? void 0 : error.errMsg) || "";
         if (msg.includes("cancel") || msg.includes("deny")) {
           isLoading.value = false;

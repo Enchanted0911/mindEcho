@@ -50,8 +50,12 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         targetDateStr.value = u.transitTargetDate;
       }
     }
-    common_vendor.onMounted(() => {
+    common_vendor.onMounted(async () => {
       prefillTransitDateFromStore();
+      const astroInfo = userStore.astrologyInfo;
+      if (hasBirthInfo() && (astroInfo == null ? void 0 : astroInfo.hasTransitCache)) {
+        await calculateTransit();
+      }
     });
     function hasBirthInfo() {
       const info = userStore.userInfo;
@@ -148,7 +152,6 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         const planetsLabel = tpDisplay ? `${tpDisplay.symbol} ${tpDisplay.name}` : tpKey || "行星";
         const natalLabel = npDisplay ? `${npDisplay.symbol} ${npDisplay.name}` : npKey || "";
         const aspectStr = aspectLabel ? `${aspectLabel.symbol} ${aspectLabel.label}` : aspectType || "相位";
-        const type = (aspectLabel == null ? void 0 : aspectLabel.harmony) || "neutral";
         const orbVal = ev.orb ?? ev.orb_value ?? ev.exact_orb ?? null;
         const strengthVal = ev.strength ?? ev.intensity_value ?? null;
         let intensity = "medium";
@@ -167,6 +170,13 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         const pressureVal = impact.pressure ?? null;
         const durationDays = impact.duration_days ?? ev.duration_days ?? null;
         const tags = Array.isArray(ev.tags) ? ev.tags : [];
+        let type = (aspectLabel == null ? void 0 : aspectLabel.harmony) || "neutral";
+        if (emotionVal != null) {
+          if (emotionVal <= -0.3 && type !== "challenge")
+            type = "challenge";
+          else if (emotionVal >= 0.3 && type === "neutral")
+            type = "positive";
+        }
         const transitSign = zodiacZhT(ev.transit_sign || ev.t_sign || ev.sign || "");
         return {
           planets: planetsLabel,
@@ -210,60 +220,105 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           parts.push("轻松流动");
       }
       const tagZh = {
+        // 自我与张力类
         "self-other tension": "自我与他人的张力",
-        "visibility": "关注度上升",
         "ego tension": "自我意识激活",
-        "challenge": "需要突破",
-        "inner world": "关注内心",
+        "identity challenge": "自我认知挑战",
         "identity focus": "聚焦自我",
+        // 注意力与表达类
+        "visibility": "关注度上升",
+        "self-expression": "自我表达",
+        "expression": "表达发挥",
+        // 内心与直觉类
+        "inner world": "关注内心",
+        "intuition": "直觉敏锐",
+        "spirituality": "灵性引导",
+        "confusion": "迷茫感",
+        "self-image": "自我形象",
+        // 活力与能量类
         "vitality": "活力增强",
         "confidence": "自信增加",
         "creative flow": "创意流动",
+        "creativity": "创意迸发",
+        "originality": "创新独创",
+        // 情感平衡类
         "emotional resonance": "情感共鸣",
+        "emotional flow": "情感流动",
         "sensitivity": "感知敏锐",
-        "self-expression": "自我表达",
         "emotional tension": "情绪波动",
         "mood swings": "心情起伏",
         "emotional conflict": "情感冲突",
         "vulnerability": "脆弱感",
+        "nurturing": "滋养关爱",
         "comfort": "舒适安稳",
         "emotional ease": "情绪轻松",
+        // 职业与关注类
         "career focus": "职业聚焦",
+        // 思维与沟通类
         "mental flow": "思维流畅",
+        "mental clarity": "思维清晰",
+        "mental tension": "思维紧绷",
         "insight": "洞察力强",
         "learning": "学习成长",
         "dialogue": "沟通顺畅",
-        "mental clarity": "思维清晰",
         "communication": "表达沟通",
         "debate": "思想碰撞",
         "information conflict": "信息冲突",
+        "miscommunication": "沟通失误",
+        // 吸引与关系类
         "attraction": "魅力吸引",
         "harmony": "和谐美好",
+        "beauty": "美感享受",
+        "pleasure": "愉悦享受",
+        "social ease": "社交顺畅",
+        "affection": "情谊填充",
+        // 行动与动力类
         "motivation": "动力充沛",
         "drive": "行动力强",
         "initiative": "主动出击",
         "action": "行动导向",
+        "energy surge": "能量激涌",
+        // 冲突与张力类
         "conflict": "冲突张力",
+        "confrontation": "正面对抗",
+        "tension": "张力感",
         "aggression": "冲动倾向",
+        "challenge": "需要突破",
+        "desire tension": "欲望与身份张力",
+        "indulgence": "放纵感官",
+        // 稳定与结构类
         "discipline": "自律专注",
         "structure": "稳定建构",
-        "challenge restriction": "限制挑战",
         "restriction": "受到制约",
+        "challenge restriction": "限制挑战",
         "patience": "耐心培养",
         "responsibility": "承担责任",
+        // 变革与自由类
         "instability": "不稳定感",
         "rebellion": "突破常规",
         "revolution": "变革契机",
         "upheaval": "翻天覆地",
         "innovation": "创新突破",
         "freedom": "自由解放",
+        "awakening": "觉醒与气场展开",
+        // 灵感与灵性类
         "inspiration": "灵感涌现",
         "compassion": "慈悲共情",
-        "intuition": "直觉敏锐",
-        "creativity": "创意迸发",
+        "opportunity": "机遇降临",
+        // 深层转化类
         "evolution": "蜕变成长",
         "transformation": "深层转化",
-        "power": "力量聚焦"
+        "power": "力量聚焦",
+        "empowerment": "力量觉醒",
+        "deep change": "深层变革",
+        "power struggle": "力量博弈",
+        "crisis": "危机与转机",
+        "compulsion": "执念驱动",
+        // 海王星及模糊类
+        "disillusionment": "幻灭感",
+        "fog": "模糊与幻象",
+        "illusion": "幻想与幻象",
+        "deception": "醒觉与分辨"
       };
       const tagTexts = tags.slice(0, 2).map((t) => tagZh[t] || "").filter(Boolean);
       if (tagTexts.length > 0)
@@ -281,16 +336,24 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       return parts.length > 0 ? parts.join("，") : harmony === "positive" ? "正向流动" : harmony === "challenge" ? "挑战张力" : "中性影响";
     }
     const realHighlights = common_vendor.computed(() => {
-      var _a, _b, _c, _d;
+      var _a, _b;
       const sum = (_a = chartData.value) == null ? void 0 : _a.summary;
       const highlights = (sum == null ? void 0 : sum.highlights) || (sum == null ? void 0 : sum.key_planets) || (sum == null ? void 0 : sum.featured_planets);
       if (highlights && Array.isArray(highlights) && highlights.length > 0) {
         return highlights.slice(0, 5).map((h) => {
+          var _a2;
           const pKey = (h.planet || h.name || h.body || "").toLowerCase().trim();
           const pd = PLANET_DISPLAY_T[pKey];
           const aspectType = (h.aspect || h.aspect_type || "").toLowerCase();
           const aspectInfo = ASPECT_LABEL_T[aspectType];
-          const harmony = h.harmony || (aspectInfo == null ? void 0 : aspectInfo.harmony) || "neutral";
+          const emotionVal = ((_a2 = h.impact) == null ? void 0 : _a2.emotion) ?? null;
+          let harmony = h.harmony || (aspectInfo == null ? void 0 : aspectInfo.harmony) || "neutral";
+          if (emotionVal != null) {
+            if (emotionVal <= -0.3 && harmony !== "challenge")
+              harmony = "challenge";
+            else if (emotionVal >= 0.3 && harmony === "neutral")
+              harmony = "positive";
+          }
           return {
             symbol: (pd == null ? void 0 : pd.symbol) || h.symbol || "✦",
             name: (pd == null ? void 0 : pd.name) || h.name || pKey,
@@ -302,26 +365,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           };
         });
       }
-      const chartTransits = (_c = (_b = chartData.value) == null ? void 0 : _b.chart) == null ? void 0 : _c.transits;
-      if (chartTransits && Array.isArray(chartTransits) && chartTransits.length > 0) {
-        return chartTransits.slice(0, 4).map((t) => {
-          const pKey = (t.planet || t.body || t.transit_planet || "").toLowerCase().trim();
-          const pd = PLANET_DISPLAY_T[pKey];
-          const aspectType = (t.aspect || t.aspect_type || t.type || "").toLowerCase();
-          const aspectInfo = ASPECT_LABEL_T[aspectType];
-          const harmony = (aspectInfo == null ? void 0 : aspectInfo.harmony) || "neutral";
-          return {
-            symbol: (pd == null ? void 0 : pd.symbol) || "✦",
-            name: (pd == null ? void 0 : pd.name) || pKey,
-            aspect: aspectInfo ? `${aspectInfo.symbol} ${aspectInfo.label}` : aspectType || "",
-            impact: t.description || t.interpretation || t.impact || "",
-            energy: harmony === "positive" ? "positive" : harmony === "challenge" ? "caution" : "deep",
-            sign: zodiacZhT(t.sign || t.transit_sign || ""),
-            strength: null
-          };
-        });
-      }
-      const events = (_d = chartData.value) == null ? void 0 : _d.events;
+      const events = (_b = chartData.value) == null ? void 0 : _b.events;
       if (!events || !Array.isArray(events))
         return [];
       const sorted = [...events].sort((a, b) => {
@@ -336,11 +380,17 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         const npDisplay = PLANET_DISPLAY_T[npKey];
         const aspectType = (ev.aspect_type || ev.aspect || ev.type || "").toLowerCase().trim();
         const aspectInfo = ASPECT_LABEL_T[aspectType];
-        const harmony = (aspectInfo == null ? void 0 : aspectInfo.harmony) || "neutral";
-        const energy = harmony === "positive" ? "positive" : harmony === "challenge" ? "caution" : "deep";
         const impact = ev.impact || {};
         const emotionVal = impact.emotion ?? null;
         const pressureVal = impact.pressure ?? null;
+        let harmony = (aspectInfo == null ? void 0 : aspectInfo.harmony) || "neutral";
+        if (emotionVal != null) {
+          if (emotionVal <= -0.3 && harmony !== "challenge")
+            harmony = "challenge";
+          else if (emotionVal >= 0.3 && harmony === "neutral")
+            harmony = "positive";
+        }
+        const energy = harmony === "positive" ? "positive" : harmony === "challenge" ? "caution" : "deep";
         const durationDays = impact.duration_days ?? ev.duration_days ?? null;
         const tags = Array.isArray(ev.tags) ? ev.tags : [];
         const strengthPct = ev.strength != null ? Math.round(Number(ev.strength) * 100) : null;
@@ -439,14 +489,15 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         const em = sum.emotion_energy ?? sum.emotional_energy ?? null;
         const ac = sum.action_energy ?? sum.action_score ?? null;
         const so = sum.social_energy ?? sum.social_score ?? null;
+        const clamp = (v) => Math.min(100, Math.max(0, Math.round(v)));
         if (ov != null && !isNaN(Number(ov)))
-          overall = Math.round(Number(ov));
+          overall = clamp(Number(ov));
         if (em != null && !isNaN(Number(em)))
-          emotion = Math.round(Number(em));
+          emotion = clamp(Number(em));
         if (ac != null && !isNaN(Number(ac)))
-          action = Math.round(Number(ac));
+          action = clamp(Number(ac));
         if (so != null && !isNaN(Number(so)))
-          social = Math.round(Number(so));
+          social = clamp(Number(so));
         if (overall == null) {
           const elStr = (sum.energy_level || "").toLowerCase().trim();
           if (elStr && ENERGY_LEVEL_PCT[elStr] != null) {
@@ -463,7 +514,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           }).filter((v) => v != null && !isNaN(Number(v))).map(Number);
           if (emVals.length > 0) {
             const avg = emVals.reduce((a, b) => a + b, 0) / emVals.length;
-            emotion = Math.round((avg + 1) / 2 * 100);
+            emotion = Math.min(100, Math.max(0, Math.round((avg + 1) / 2 * 100)));
           }
         }
         if (action == null) {
@@ -473,7 +524,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           }).filter((v) => v != null && !isNaN(Number(v))).map(Number);
           if (prVals.length > 0) {
             const avg = prVals.reduce((a, b) => a + b, 0) / prVals.length;
-            action = Math.round(avg * 100);
+            action = Math.min(100, Math.max(0, Math.round(avg * 100)));
           }
         }
       }
@@ -484,16 +535,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
     async function calculateTransit() {
       var _a;
       if (!hasBirthInfo()) {
-        common_vendor.index.showModal({
-          title: "未设置出生信息",
-          content: "流运解读需要先设置出生信息，是否前往本命盘页面设置？",
-          confirmText: "去设置",
-          cancelText: "取消",
-          success: (res) => {
-            if (res.confirm)
-              goToNatalPage();
-          }
-        });
+        step.value = "form";
         return;
       }
       step.value = "loading";
@@ -503,26 +545,17 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         loadingText.value = TEXTS[++idx % TEXTS.length];
       }, 1400);
       try {
-        const result = await api_astrology.getTransitChart({ targetDate: targetDateStr.value });
-        chartData.value = result;
+        chartData.value = await api_astrology.getTransitChart({ targetDate: targetDateStr.value });
         userStore.updateTransitDate(targetDateStr.value);
+        userStore.updateAstrologyCache({ hasTransitCache: true });
       } catch (e) {
         if ((e == null ? void 0 : e.code) === 7001 || ((_a = e == null ? void 0 : e.message) == null ? void 0 : _a.includes("出生信息"))) {
           step.value = "form";
-          common_vendor.index.showModal({
-            title: "未设置出生信息",
-            content: "请先设置出生信息再计算流运",
-            confirmText: "去设置",
-            cancelText: "取消",
-            success: (res) => {
-              if (res.confirm)
-                goToNatalPage();
-            }
-          });
+          userStore.updateAstrologyCache({ hasTransitCache: false });
           clearInterval(timer);
           return;
         }
-        chartData.value = { events: [], summary: null, chart: null };
+        chartData.value = { events: [], summary: null };
       } finally {
         clearInterval(timer);
         step.value = "result";
@@ -617,13 +650,13 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         q: targetDateStr.value,
         r: pickerMinDate,
         s: common_vendor.unref(pickerMaxDate),
-        t: common_vendor.o(onDatePickerChange, "22"),
+        t: common_vendor.o(onDatePickerChange, "0b"),
         v: !isToday.value
       }, !isToday.value ? {
-        w: common_vendor.o(($event) => targetDateStr.value = formatDateToYMD(common_vendor.unref(today)), "6e")
+        w: common_vendor.o(($event) => targetDateStr.value = formatDateToYMD(common_vendor.unref(today)), "b3")
       } : {}, {
         x: !hasBirthInfo() ? 1 : "",
-        y: common_vendor.o(calculateTransit, "29")
+        y: common_vendor.o(calculateTransit, "73")
       }) : {}, {
         z: step.value === "result"
       }, step.value === "result" ? common_vendor.e({
@@ -636,15 +669,15 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         E: activeTab.value === "today"
       }, activeTab.value === "today" ? {} : {}, {
         F: activeTab.value === "today" ? 1 : "",
-        G: common_vendor.o(($event) => activeTab.value = "today", "fd"),
+        G: common_vendor.o(($event) => activeTab.value = "today", "c9"),
         H: activeTab.value === "events"
       }, activeTab.value === "events" ? {} : {}, {
         I: activeTab.value === "events" ? 1 : "",
-        J: common_vendor.o(($event) => activeTab.value = "events", "a1"),
+        J: common_vendor.o(($event) => activeTab.value = "events", "29"),
         K: activeTab.value === "interpret"
       }, activeTab.value === "interpret" ? {} : {}, {
         L: activeTab.value === "interpret" ? 1 : "",
-        M: common_vendor.o(($event) => activeTab.value = "interpret", "84"),
+        M: common_vendor.o(($event) => activeTab.value = "interpret", "ea"),
         N: activeTab.value === "today"
       }, activeTab.value === "today" ? common_vendor.e({
         O: realEnergy.value
@@ -801,7 +834,7 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         }),
         Z: !interpretation.value && !isInterpreting.value
       }, !interpretation.value && !isInterpreting.value ? {
-        aa: common_vendor.o(getInterpretation, "60")
+        aa: common_vendor.o(getInterpretation, "2b")
       } : {}, {
         ab: interpretation.value || isInterpreting.value
       }, interpretation.value || isInterpreting.value ? common_vendor.e({
@@ -812,10 +845,10 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
       }) : {}, {
         af: interpretation.value && !isInterpreting.value
       }, interpretation.value && !isInterpreting.value ? {
-        ag: common_vendor.o(getInterpretation, "4a")
+        ag: common_vendor.o(getInterpretation, "f5")
       } : {}) : {}, {
-        ah: common_vendor.o(($event) => step.value = "form", "45"),
-        ai: common_vendor.o(goInterpret, "86")
+        ah: common_vendor.o(($event) => step.value = "form", "78"),
+        ai: common_vendor.o(goInterpret, "c1")
       }) : {});
     };
   }

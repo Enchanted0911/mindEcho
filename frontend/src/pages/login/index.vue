@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {ref} from 'vue'
 import {wxLogin} from '../../api/auth'
+import {getUserAstrologyInfo} from '../../api/astrology'
 import {useUserStore} from '../../store/user'
 
 const userStore = useUserStore()
@@ -31,6 +32,12 @@ async function handleLogin() {
     const response = await wxLogin(loginResult.code)
     userStore.setToken(response.token)
     userStore.setUserInfo(response.userInfo)
+    // 异步拉取星盘信息（不阻塞跳转，在后台静默获取）
+    getUserAstrologyInfo().then(info => {
+      userStore.setAstrologyInfo(info)
+    }).catch(err => {
+      console.warn('[login] Failed to fetch astrology info:', err)
+    })
     uni.switchTab({ url: '/pages/chat/index' })
   } catch (error: any) {
     console.error('Login error:', error)

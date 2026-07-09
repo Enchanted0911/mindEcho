@@ -301,9 +301,12 @@ public class ChatService {
                     );
 
             // 渐进式工具披露：仅当检测到占星关键词时注入占星工具
+            // 同时通过 toolContext 将 userId 传入工具调用链，解决 boundedElastic 线程切换导致 ThreadLocal 丢失的问题
             if (isAstrologyRelated(request.getMessage())) {
                 log.debug("Astrology keywords detected, injecting astrology tools for userId={}", userId);
-                promptSpec = promptSpec.tools(astrologyTools);
+                promptSpec = promptSpec
+                        .tools(astrologyTools)
+                        .toolContext(java.util.Map.of("userId", userId));
             }
 
             promptSpec

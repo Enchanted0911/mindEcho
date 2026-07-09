@@ -406,7 +406,7 @@ async function selectPersonality(code: string) {
         <text class="chevron">›</text>
       </view>
       <view class="header-right" @click="startNewChat">
-        <view class="icon-btn">
+        <view class="icon-btn new-chat-btn">
           <text class="icon-text">✏</text>
         </view>
       </view>
@@ -422,17 +422,16 @@ async function selectPersonality(code: string) {
       upper-threshold="60"
     >
       <view v-if="isLoadingMoreMsg" class="load-more-tip">
-        <text>加载中…</text>
+        <text class="load-more-text">加载中…</text>
       </view>
       <view v-else-if="chatStore.msgTotalPages !== -1 && !chatStore.hasMoreMessages()" class="load-more-tip">
-        <text>— 已加载全部消息 —</text>
+        <text class="load-more-text">— 已加载全部消息 —</text>
       </view>
 
       <!-- 欢迎区域 -->
       <view v-if="messages.length === 0" class="welcome-area">
         <view class="welcome-avatar">
           <text class="welcome-emoji">{{ personality.emoji }}</text>
-          <view class="avatar-glow" />
         </view>
         <text class="welcome-name">{{ personality.name }}</text>
         <text class="welcome-desc">今天感觉怎么样？随时可以和我聊聊 🌙</text>
@@ -474,7 +473,7 @@ async function selectPersonality(code: string) {
               :show-confirm-bar="false"
               :focus="true"
               placeholder="修改你的消息..."
-              :placeholder-style="'color: rgba(255,255,255,0.25); font-size: 28rpx'"
+              :placeholder-style="'color: rgba(100,100,120,0.4); font-size: 28rpx'"
             />
             <view class="inline-edit-actions">
               <view class="inline-cancel-btn" @click="cancelInlineEdit">
@@ -503,16 +502,17 @@ async function selectPersonality(code: string) {
         </view>
 
         <!-- AI 消息 -->
-        <view
-          v-else
-          class="bubble-ai"
-          :class="{ 'bubble-streaming': msg.isStreaming }"
-        >
-          <text class="msg-text-ai">{{ msg.content }}</text>
-          <text v-if="msg.isStreaming && !msg.content" class="typing-dots">
-            <text class="dot">●</text><text class="dot">●</text><text class="dot">●</text>
-          </text>
-          <text v-if="msg.isStreaming && msg.content" class="cursor">▋</text>
+        <view v-else class="ai-msg-col">
+          <!-- AI 消息内容卡片 -->
+          <view
+            class="bubble-ai"
+            :class="{ 'bubble-streaming': msg.isStreaming }"
+          >
+            <text v-if="msg.isStreaming && !msg.content" class="typing-indicator">
+              <text class="dot dot1">●</text><text class="dot dot2">●</text><text class="dot dot3">●</text>
+            </text>
+            <text v-else class="msg-text-ai">{{ msg.content }}<text v-if="msg.isStreaming" class="cursor">▋</text></text>
+          </view>
         </view>
       </view>
 
@@ -522,19 +522,21 @@ async function selectPersonality(code: string) {
 
     <!-- 输入区域 -->
     <view class="input-area">
-      <view class="input-box">
-        <textarea
-          v-model="inputText"
-          class="message-input"
-          placeholder="说说你的心情…"
-          :placeholder-style="'color: rgba(180,170,200,0.35); font-size: 28rpx'"
-          :auto-height="true"
-          :max-height="120"
-          :show-confirm-bar="false"
-          :disabled="isStreaming"
-          @confirm="sendMessage"
-        />
-        <view v-if="isStreaming" class="stop-btn" @click="handleStopStreaming">
+      <view class="input-row">
+        <view class="input-box">
+          <textarea
+            v-model="inputText"
+            class="message-input"
+            placeholder="Ask me anything..."
+            :placeholder-style="'color: rgba(150,150,170,0.55); font-size: 28rpx'"
+            :auto-height="true"
+            :max-height="120"
+            :show-confirm-bar="false"
+            :disabled="isStreaming"
+            @confirm="sendMessage"
+          />
+        </view>
+        <view v-if="isStreaming" class="send-btn stop-active" @click="handleStopStreaming">
           <view class="stop-icon" />
         </view>
         <view
@@ -548,7 +550,7 @@ async function selectPersonality(code: string) {
       </view>
     </view>
 
-    <!-- 会话列表面板 -->
+    <!-- 会话列表面板（左滑抽屉） -->
     <view v-if="showSessionPanel" class="session-overlay" @click="showSessionPanel = false">
       <view class="session-panel" @click.stop>
         <view class="session-panel-header">
@@ -604,13 +606,13 @@ async function selectPersonality(code: string) {
       </view>
     </view>
 
-    <!-- 人格选择器 -->
+    <!-- 人格选择器（底部抽屉） -->
     <view v-if="showPersonalityPicker" class="modal-overlay" @click="showPersonalityPicker = false">
       <view class="personality-picker" @click.stop>
         <view class="picker-handle" />
         <view class="picker-header">
           <text class="picker-title">选择 AI 伴侣</text>
-          <view class="close-btn" @click="showPersonalityPicker = false">
+          <view class="close-btn picker-close" @click="showPersonalityPicker = false">
             <text class="close-icon">✕</text>
           </view>
         </view>
@@ -658,12 +660,12 @@ async function selectPersonality(code: string) {
 </template>
 
 <style>
-/* ── 全局 ── */
+/* ── 全局页面 ── */
 .chat-page {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #0d0b1a;
+  background: #f5f5f7;
 }
 
 /* ── 顶部栏 ── */
@@ -671,10 +673,9 @@ async function selectPersonality(code: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 96rpx 24rpx 16rpx;
-  background: rgba(15, 12, 28, 0.95);
-  backdrop-filter: blur(20rpx);
-  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+  padding: 96rpx 28rpx 20rpx;
+  background: #ffffff;
+  border-bottom: 1rpx solid rgba(0, 0, 0, 0.06);
   flex-shrink: 0;
 }
 
@@ -682,33 +683,39 @@ async function selectPersonality(code: string) {
   width: 72rpx;
   height: 72rpx;
   border-radius: 18rpx;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  background: #f0f0f3;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.new-chat-btn {
+  background: #1a1a2e;
+}
+
 .icon-text {
   font-size: 32rpx;
-  color: rgba(200, 190, 230, 0.8);
+  color: #555577;
+}
+
+.new-chat-btn .icon-text {
+  color: #ffffff;
 }
 
 .header-center {
   display: flex;
   align-items: center;
   gap: 12rpx;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  background: #f0f0f3;
   border-radius: 40rpx;
   padding: 10rpx 24rpx 10rpx 14rpx;
 }
 
 .avatar-sm {
-  width: 44rpx;
-  height: 44rpx;
+  width: 48rpx;
+  height: 48rpx;
   border-radius: 50%;
-  background: rgba(120, 80, 200, 0.3);
+  background: linear-gradient(135deg, #667eea, #764ba2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -718,71 +725,66 @@ async function selectPersonality(code: string) {
 
 .personality-name {
   font-size: 28rpx;
-  color: rgba(220, 210, 240, 0.9);
-  font-weight: 500;
+  color: #1a1a2e;
+  font-weight: 600;
 }
 
 .chevron {
-  font-size: 30rpx;
-  color: rgba(180, 160, 220, 0.5);
+  font-size: 32rpx;
+  color: #999;
 }
 
 /* ── 消息区域 ── */
 .messages-container {
   flex: 1;
   overflow: hidden;
-  padding: 20rpx 24rpx 8rpx;
+  padding: 24rpx 28rpx 12rpx;
+  background: #f5f5f7;
 }
 
 .load-more-tip {
   text-align: center;
-  padding: 16rpx 0;
-  color: rgba(180, 170, 210, 0.35);
-  font-size: 22rpx;
+  padding: 20rpx 0;
 }
 
-/* 欢迎区 */
+.load-more-text {
+  font-size: 22rpx;
+  color: #bbb;
+}
+
+/* ── 欢迎区 ── */
 .welcome-area {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 80rpx 32rpx 40rpx;
+  padding: 80rpx 32rpx 48rpx;
   gap: 20rpx;
 }
 
 .welcome-avatar {
-  position: relative;
-  width: 100rpx;
-  height: 100rpx;
+  width: 112rpx;
+  height: 112rpx;
   border-radius: 50%;
-  background: rgba(120, 80, 200, 0.2);
-  border: 1.5rpx solid rgba(150, 100, 250, 0.3);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 8rpx;
+  box-shadow: 0 8rpx 32rpx rgba(102, 126, 234, 0.35);
 }
 
-.welcome-emoji { font-size: 50rpx; }
-
-.avatar-glow {
-  position: absolute;
-  inset: -8rpx;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(120, 80, 220, 0.15), transparent);
-}
+.welcome-emoji { font-size: 54rpx; }
 
 .welcome-name {
-  font-size: 36rpx;
-  color: rgba(240, 235, 255, 0.95);
-  font-weight: 600;
+  font-size: 38rpx;
+  color: #1a1a2e;
+  font-weight: 700;
 }
 
 .welcome-desc {
-  font-size: 26rpx;
-  color: rgba(180, 170, 210, 0.6);
+  font-size: 27rpx;
+  color: #888;
   text-align: center;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .quick-replies {
@@ -790,96 +792,103 @@ async function selectPersonality(code: string) {
   flex-wrap: wrap;
   gap: 14rpx;
   justify-content: center;
-  margin-top: 16rpx;
+  margin-top: 12rpx;
 }
 
 .quick-reply-btn {
-  background: rgba(120, 80, 200, 0.12);
-  border: 1rpx solid rgba(150, 100, 250, 0.25);
+  background: #ffffff;
+  border: 1.5rpx solid #e8e8f0;
   border-radius: 30rpx;
-  padding: 14rpx 26rpx;
+  padding: 14rpx 28rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
 }
 
 .quick-reply-text {
-  font-size: 25rpx;
-  color: rgba(180, 150, 240, 0.85);
+  font-size: 26rpx;
+  color: #555577;
 }
 
-/* 消息 wrapper */
+/* ── 消息条 ── */
 .message-wrapper {
   display: flex;
-  margin-bottom: 24rpx;
+  margin-bottom: 28rpx;
   align-items: flex-end;
-  gap: 14rpx;
+  gap: 16rpx;
 }
 
 .message-user { flex-direction: row-reverse; }
 .message-ai { flex-direction: row; }
 
 /* AI 头像 */
-.ai-avatar-wrap { flex-shrink: 0; }
+.ai-avatar-wrap { flex-shrink: 0; align-self: flex-start; margin-top: 4rpx; }
 
 .ai-avatar {
-  width: 64rpx;
-  height: 64rpx;
+  width: 68rpx;
+  height: 68rpx;
   border-radius: 50%;
-  background: rgba(120, 80, 200, 0.25);
-  border: 1.5rpx solid rgba(150, 100, 250, 0.3);
+  background: linear-gradient(135deg, #667eea, #764ba2);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4rpx 16rpx rgba(102, 126, 234, 0.3);
 }
 
-.ai-avatar-emoji { font-size: 32rpx; }
+.ai-avatar-emoji { font-size: 34rpx; }
 
-/* 气泡 - 用户 */
+/* ── 用户气泡 ── */
 .user-msg-col {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  max-width: 72%;
+  max-width: 70%;
 }
 
 .bubble-user {
-  background: linear-gradient(135deg, #7c4dff 0%, #5c35cc 100%);
-  border-radius: 20rpx 20rpx 4rpx 20rpx;
-  padding: 20rpx 24rpx;
+  background: #1a1a2e;
+  border-radius: 24rpx 24rpx 6rpx 24rpx;
+  padding: 22rpx 28rpx;
   max-width: 100%;
-  box-shadow: 0 4rpx 20rpx rgba(100, 60, 220, 0.3);
+  box-shadow: 0 4rpx 20rpx rgba(26, 26, 46, 0.2);
 }
 
 .bubble-selected {
-  box-shadow: 0 0 0 2rpx rgba(180, 140, 255, 0.6), 0 4rpx 20rpx rgba(100, 60, 220, 0.3);
+  box-shadow: 0 0 0 3rpx rgba(102, 126, 234, 0.5), 0 4rpx 20rpx rgba(26, 26, 46, 0.2);
 }
 
 .msg-text-user {
-  font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.95);
+  font-size: 29rpx;
+  color: #ffffff;
   line-height: 1.65;
   word-break: break-word;
 }
 
-/* 气泡 - AI */
+/* ── AI 气泡 ── */
+.ai-msg-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 74%;
+}
+
 .bubble-ai {
-  max-width: 72%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1rpx solid rgba(255, 255, 255, 0.08);
-  border-radius: 20rpx 20rpx 20rpx 4rpx;
-  padding: 20rpx 24rpx;
-  backdrop-filter: blur(10rpx);
+  background: #ffffff;
+  border-radius: 6rpx 24rpx 24rpx 24rpx;
+  padding: 22rpx 28rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.07);
+  border: 1rpx solid rgba(0, 0, 0, 0.04);
 }
 
 .msg-text-ai {
-  font-size: 28rpx;
-  color: rgba(225, 218, 245, 0.92);
-  line-height: 1.75;
+  font-size: 29rpx;
+  color: #1a1a2e;
+  line-height: 1.8;
   word-break: break-word;
 }
 
 .cursor {
-  color: rgba(150, 100, 250, 0.8);
+  color: #667eea;
   font-size: 26rpx;
-  animation: blink 1s infinite;
+  animation: blink 0.9s infinite;
 }
 
 @keyframes blink {
@@ -887,25 +896,33 @@ async function selectPersonality(code: string) {
   50% { opacity: 0; }
 }
 
-.typing-dots { display: flex; gap: 6rpx; align-items: center; }
-.dot {
-  font-size: 12rpx;
-  color: rgba(150, 100, 250, 0.6);
-  animation: bounce-dot 1.2s ease-in-out infinite;
+/* 打字动画 */
+.typing-indicator {
+  display: flex;
+  gap: 8rpx;
+  align-items: center;
+  padding: 4rpx 0;
 }
-.dot:nth-child(2) { animation-delay: 0.2s; }
-.dot:nth-child(3) { animation-delay: 0.4s; }
+
+.dot {
+  font-size: 14rpx;
+  color: #aaa;
+  animation: bounce-dot 1.4s ease-in-out infinite;
+}
+.dot1 { animation-delay: 0s; }
+.dot2 { animation-delay: 0.2s; }
+.dot3 { animation-delay: 0.4s; }
 
 @keyframes bounce-dot {
-  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
-  40% { transform: translateY(-5rpx); opacity: 1; }
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+  40% { transform: translateY(-6rpx); opacity: 1; }
 }
 
-/* 工具栏 */
+/* ── 工具栏 ── */
 .msg-toolbar {
   display: flex;
   gap: 8rpx;
-  margin-top: 8rpx;
+  margin-top: 10rpx;
   justify-content: flex-end;
 }
 
@@ -913,32 +930,34 @@ async function selectPersonality(code: string) {
   display: flex;
   align-items: center;
   gap: 6rpx;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  background: #ffffff;
+  border: 1rpx solid #e5e5ea;
   border-radius: 20rpx;
-  padding: 8rpx 18rpx;
+  padding: 8rpx 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
 }
 
-.toolbar-icon { font-size: 22rpx; color: rgba(180, 150, 240, 0.8); }
-.toolbar-label { font-size: 22rpx; color: rgba(180, 150, 240, 0.8); }
+.toolbar-icon { font-size: 22rpx; color: #667eea; }
+.toolbar-label { font-size: 22rpx; color: #555577; }
 
-/* inline 编辑 */
+/* ── inline 编辑 ── */
 .inline-edit-wrapper {
   width: 100%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1.5rpx solid rgba(150, 100, 250, 0.3);
+  background: #ffffff;
+  border: 2rpx solid #667eea;
   border-radius: 20rpx;
   padding: 20rpx;
+  box-shadow: 0 4rpx 20rpx rgba(102, 126, 234, 0.15);
 }
 
 .inline-edit-textarea {
   width: 100%;
-  font-size: 28rpx;
-  color: rgba(225, 218, 245, 0.92);
-  line-height: 1.5;
+  font-size: 29rpx;
+  color: #1a1a2e;
+  line-height: 1.6;
   background: transparent;
   min-height: 60rpx;
-  margin-bottom: 14rpx;
+  margin-bottom: 16rpx;
 }
 
 .inline-edit-actions {
@@ -948,104 +967,111 @@ async function selectPersonality(code: string) {
 }
 
 .inline-cancel-btn, .inline-confirm-btn {
-  padding: 10rpx 24rpx;
+  padding: 12rpx 28rpx;
   border-radius: 20rpx;
 }
 
 .inline-cancel-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  background: #f0f0f3;
 }
 
 .inline-confirm-btn {
-  background: linear-gradient(135deg, #7c4dff, #5c35cc);
+  background: #1a1a2e;
 }
 
-.inline-btn-text { font-size: 24rpx; color: rgba(200, 190, 230, 0.8); }
-.inline-confirm-text { color: white; font-weight: 600; }
+.inline-btn-text { font-size: 25rpx; color: #666; }
+.inline-confirm-text { color: #ffffff; font-weight: 600; }
 
-.anchor { height: 16rpx; }
+.anchor { height: 20rpx; }
 
 /* ── 输入区域 ── */
 .input-area {
-  padding: 14rpx 20rpx 44rpx;
-  background: rgba(15, 12, 28, 0.95);
-  border-top: 1rpx solid rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(20rpx);
+  padding: 16rpx 24rpx 52rpx;
+  background: #ffffff;
+  border-top: 1rpx solid rgba(0, 0, 0, 0.06);
   flex-shrink: 0;
 }
 
-.input-box {
+.input-row {
   display: flex;
   align-items: flex-end;
-  gap: 12rpx;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  gap: 14rpx;
+}
+
+.input-box {
+  flex: 1;
+  background: #f5f5f7;
   border-radius: 22rpx;
-  padding: 14rpx 14rpx 14rpx 20rpx;
-  min-height: 80rpx;
+  padding: 16rpx 20rpx;
+  min-height: 82rpx;
+  display: flex;
+  align-items: center;
+  border: 1.5rpx solid transparent;
 }
 
 .message-input {
   flex: 1;
-  font-size: 28rpx;
-  color: rgba(225, 218, 245, 0.92);
-  line-height: 1.5;
+  font-size: 29rpx;
+  color: #1a1a2e;
+  line-height: 1.55;
   background: transparent;
   width: 100%;
   min-height: 44rpx;
 }
 
-.send-btn, .stop-btn {
-  width: 66rpx;
-  height: 66rpx;
-  border-radius: 16rpx;
+.send-btn {
+  width: 82rpx;
+  height: 82rpx;
+  border-radius: 22rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  background: #e0e0e8;
   transition: all 0.2s;
 }
 
 .send-active {
-  background: linear-gradient(135deg, #7c4dff, #5c35cc);
-  border-color: rgba(150, 100, 250, 0.5);
-  box-shadow: 0 4rpx 16rpx rgba(100, 60, 220, 0.4);
+  background: #1a1a2e;
+  box-shadow: 0 6rpx 20rpx rgba(26, 26, 46, 0.3);
+}
+
+.stop-active {
+  background: #ff4757;
+  box-shadow: 0 6rpx 20rpx rgba(255, 71, 87, 0.3);
 }
 
 .send-icon {
-  font-size: 32rpx;
-  color: rgba(200, 190, 230, 0.5);
-  font-weight: bold;
+  font-size: 34rpx;
+  color: #999;
+  font-weight: 700;
 }
 
-.send-active .send-icon { color: white; }
+.send-active .send-icon { color: #ffffff; }
 
 .stop-icon {
-  width: 22rpx;
-  height: 22rpx;
-  background: #e06060;
-  border-radius: 4rpx;
+  width: 24rpx;
+  height: 24rpx;
+  background: #ffffff;
+  border-radius: 5rpx;
 }
 
 /* ── 会话面板 ── */
 .session-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8rpx);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6rpx);
   z-index: 200;
   display: flex;
 }
 
 .session-panel {
-  width: 76%;
-  max-width: 560rpx;
+  width: 78%;
+  max-width: 580rpx;
   height: 100%;
-  background: #120f22;
-  border-right: 1rpx solid rgba(255, 255, 255, 0.07);
+  background: #ffffff;
+  border-right: 1rpx solid rgba(0, 0, 0, 0.06);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1055,54 +1081,54 @@ async function selectPersonality(code: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 96rpx 28rpx 20rpx;
-  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+  padding: 96rpx 28rpx 22rpx;
+  border-bottom: 1rpx solid #f0f0f3;
   flex-shrink: 0;
 }
 
 .session-panel-title {
-  font-size: 34rpx;
-  color: rgba(230, 225, 255, 0.92);
+  font-size: 36rpx;
+  color: #1a1a2e;
   font-weight: 700;
 }
 
 .close-btn {
-  width: 48rpx;
-  height: 48rpx;
-  border-radius: 12rpx;
-  background: rgba(255, 255, 255, 0.06);
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 14rpx;
+  background: #f0f0f3;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.close-icon { font-size: 24rpx; color: rgba(180, 170, 210, 0.6); }
+.close-icon { font-size: 24rpx; color: #888; }
 
 .new-session-item {
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  padding: 24rpx 28rpx;
-  border-bottom: 1rpx solid rgba(255, 255, 255, 0.05);
+  gap: 18rpx;
+  padding: 26rpx 28rpx;
+  border-bottom: 1rpx solid #f5f5f7;
 }
 
 .new-session-icon-wrap {
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 12rpx;
-  background: rgba(120, 80, 200, 0.2);
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 14rpx;
+  background: #1a1a2e;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.new-session-icon { font-size: 22rpx; color: rgba(160, 120, 240, 0.8); }
-.new-session-text { font-size: 27rpx; color: rgba(180, 150, 240, 0.85); font-weight: 500; }
+.new-session-icon { font-size: 22rpx; color: #ffffff; }
+.new-session-text { font-size: 28rpx; color: #1a1a2e; font-weight: 600; }
 
 .session-empty-tip {
   padding: 40rpx 28rpx;
   text-align: center;
-  color: rgba(180, 170, 210, 0.35);
+  color: #bbb;
   font-size: 24rpx;
 }
 
@@ -1111,12 +1137,12 @@ async function selectPersonality(code: string) {
 .session-item {
   display: flex;
   align-items: center;
-  padding: 20rpx 28rpx;
-  border-bottom: 1rpx solid rgba(255, 255, 255, 0.04);
+  padding: 22rpx 28rpx;
+  border-bottom: 1rpx solid #f5f5f7;
 }
 
 .session-active {
-  background: rgba(120, 80, 200, 0.1);
+  background: #f0f0f8;
 }
 
 .session-item-info {
@@ -1128,49 +1154,50 @@ async function selectPersonality(code: string) {
 }
 
 .session-title {
-  font-size: 27rpx;
-  color: rgba(220, 215, 245, 0.85);
+  font-size: 28rpx;
+  color: #1a1a2e;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 
-.session-time { font-size: 21rpx; color: rgba(160, 150, 190, 0.5); }
+.session-time { font-size: 22rpx; color: #bbb; }
 
 .session-delete-btn {
   padding: 8rpx 8rpx 8rpx 20rpx;
 }
 
-.session-delete-icon { font-size: 28rpx; color: rgba(200, 180, 220, 0.3); }
+.session-delete-icon { font-size: 30rpx; color: #ccc; }
 
 /* ── 人格选择器 ── */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(10rpx);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8rpx);
   display: flex;
   align-items: flex-end;
   z-index: 100;
 }
 
 .personality-picker {
-  background: #130e24;
-  border-top: 1rpx solid rgba(255, 255, 255, 0.08);
+  background: #ffffff;
+  border-top: 1rpx solid rgba(0, 0, 0, 0.06);
   border-top-left-radius: 36rpx;
   border-top-right-radius: 36rpx;
   padding: 16rpx 28rpx 80rpx;
   width: 100%;
   max-height: 82vh;
   overflow-y: auto;
-  box-shadow: 0 -8rpx 40rpx rgba(0, 0, 0, 0.4);
+  box-shadow: 0 -8rpx 40rpx rgba(0, 0, 0, 0.12);
 }
 
 .picker-handle {
-  width: 60rpx;
-  height: 6rpx;
-  border-radius: 3rpx;
-  background: rgba(255, 255, 255, 0.12);
+  width: 64rpx;
+  height: 7rpx;
+  border-radius: 4rpx;
+  background: #e0e0e8;
   margin: 0 auto 28rpx;
 }
 
@@ -1182,24 +1209,29 @@ async function selectPersonality(code: string) {
 }
 
 .picker-title {
-  font-size: 34rpx;
-  color: rgba(230, 225, 255, 0.95);
+  font-size: 36rpx;
+  color: #1a1a2e;
   font-weight: 700;
+}
+
+.picker-close {
+  background: #f0f0f3;
 }
 
 .gender-section { margin-bottom: 28rpx; }
 
 .gender-label {
   font-size: 22rpx;
-  color: rgba(180, 160, 220, 0.45);
+  color: #aaa;
   display: block;
   margin-bottom: 16rpx;
   letter-spacing: 2rpx;
+  text-transform: uppercase;
 }
 
 .picker-loading {
   text-align: center;
-  color: rgba(180, 170, 210, 0.4);
+  color: #ccc;
   font-size: 26rpx;
   padding: 40rpx 0;
 }
@@ -1211,10 +1243,10 @@ async function selectPersonality(code: string) {
 }
 
 .personality-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1rpx solid rgba(255, 255, 255, 0.08);
-  border-radius: 20rpx;
-  padding: 24rpx 16rpx;
+  background: #f8f8fb;
+  border: 1.5rpx solid #ebebf0;
+  border-radius: 22rpx;
+  padding: 26rpx 16rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1222,13 +1254,13 @@ async function selectPersonality(code: string) {
 }
 
 .personality-active {
-  background: rgba(120, 80, 200, 0.15);
-  border-color: rgba(150, 100, 250, 0.4);
-  box-shadow: 0 4rpx 20rpx rgba(100, 60, 220, 0.2);
+  background: #f0f0f8;
+  border-color: #667eea;
+  box-shadow: 0 4rpx 16rpx rgba(102, 126, 234, 0.15);
 }
 
-.p-emoji { font-size: 46rpx; }
-.p-name { font-size: 27rpx; color: rgba(225, 218, 245, 0.92); font-weight: 600; }
-.p-desc { font-size: 21rpx; color: rgba(180, 170, 210, 0.5); text-align: center; line-height: 1.4; }
+.p-emoji { font-size: 48rpx; }
+.p-name { font-size: 28rpx; color: #1a1a2e; font-weight: 600; }
+.p-desc { font-size: 22rpx; color: #999; text-align: center; line-height: 1.4; }
 </style>
 

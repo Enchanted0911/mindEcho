@@ -6,301 +6,114 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
   __name: "index",
   setup(__props) {
     const userStore = store_user.useUserStore();
-    const hasNatal = common_vendor.ref(false);
-    const isChecking = common_vendor.ref(true);
-    const PLANETS = [
-      {
-        id: "sun",
-        name: "太阳",
-        symbol: "☉",
-        color: "#FFD060",
-        size: 26,
-        orbitR: 0,
-        speed: 0,
-        angle: 0,
-        desc: "生命力与自我核心"
-      },
-      {
-        id: "mercury",
-        name: "水星",
-        symbol: "☿",
-        color: "#B0C8E0",
-        size: 9,
-        orbitR: 80,
-        speed: 1.8,
-        angle: 30,
-        desc: "思维、沟通与学习"
-      },
-      {
-        id: "venus",
-        name: "金星",
-        symbol: "♀",
-        color: "#FFB8A8",
-        size: 13,
-        orbitR: 120,
-        speed: 1.2,
-        angle: 80,
-        desc: "爱、美与价值观"
-      },
-      {
-        id: "earth",
-        name: "地球",
-        symbol: "🌍",
-        color: "#60B8E0",
-        size: 13,
-        orbitR: 165,
-        speed: 0.9,
-        angle: 150,
-        desc: "你所在的世界"
-      },
-      {
-        id: "moon",
-        name: "月亮",
-        symbol: "☽",
-        color: "#D8D0FF",
-        size: 9,
-        orbitR: 190,
-        speed: 2.5,
-        angle: 60,
-        desc: "情感、直觉与潜意识"
-      },
-      {
-        id: "mars",
-        name: "火星",
-        symbol: "♂",
-        color: "#FF8070",
-        size: 11,
-        orbitR: 230,
-        speed: 0.55,
-        angle: 220,
-        desc: "行动力、欲望与冲突"
-      },
-      {
-        id: "jupiter",
-        name: "木星",
-        symbol: "♃",
-        color: "#E0C090",
-        size: 20,
-        orbitR: 285,
-        speed: 0.22,
-        angle: 310,
-        desc: "幸运、扩展与哲学"
-      },
-      {
-        id: "saturn",
-        name: "土星",
-        symbol: "♄",
-        color: "#C8B890",
-        size: 17,
-        orbitR: 335,
-        speed: 0.12,
-        angle: 180,
-        desc: "规则、纪律与命运课题"
+    const today = /* @__PURE__ */ new Date();
+    const monthDay = `${today.getMonth() + 1}月${today.getDate()}日`;
+    const isRefreshing = common_vendor.ref(false);
+    const todayFortune = common_vendor.ref({
+      planet: "太阳",
+      sign: "天蝎座",
+      icon: "🔥",
+      iconBg: "#E07428",
+      summary: "今天能量转向深层探索，适合进行内省或处理复杂的财务问题。直觉力增强，相信你的第一感..."
+    });
+    const birthInfo = common_vendor.computed(() => userStore.astrologyInfo);
+    const hasBirth = common_vendor.computed(() => {
+      var _a, _b;
+      return !!(((_a = birthInfo.value) == null ? void 0 : _a.birthCity) && ((_b = birthInfo.value) == null ? void 0 : _b.birthTime));
+    });
+    const birthDisplayTime = common_vendor.computed(() => {
+      var _a;
+      const t = (_a = birthInfo.value) == null ? void 0 : _a.birthTime;
+      if (!t)
+        return null;
+      try {
+        const [date, time] = t.split(" ");
+        const [y, m, d] = date.split("-").map(Number);
+        return `${y}年${m}月${d}日 ${time}`;
+      } catch {
+        return t;
       }
-    ];
-    const planets = common_vendor.ref(PLANETS.map((p) => ({ ...p })));
-    let animTimer = null;
-    function startAnimation() {
-      animTimer = setInterval(() => {
-        planets.value.forEach((p) => {
-          if (p.orbitR > 0) {
-            p.angle = (p.angle + p.speed * 0.12) % 360;
-          }
-        });
-      }, 50);
-    }
-    function stopAnimation() {
-      if (animTimer)
-        clearInterval(animTimer);
-    }
-    const selectedPlanet = common_vendor.ref(null);
-    const showPlanetInfo = common_vendor.ref(false);
-    function onPlanetTap(planet) {
-      selectedPlanet.value = planet;
-      showPlanetInfo.value = true;
-    }
-    function closePlanetInfo() {
-      showPlanetInfo.value = false;
-      selectedPlanet.value = null;
-    }
-    const showFeature = common_vendor.ref(null);
-    function openFeature(key) {
-      showFeature.value = key;
-    }
-    function closeFeature() {
-      showFeature.value = null;
-    }
-    const FEATURE_INFO = {
-      natal: {
-        title: "本命盘",
-        subtitle: "Natal Chart",
-        icon: "☉",
-        color: "#9b87d1",
-        desc: "探索你的星盘结构、行星能量与人生底色，了解性格深层动力。",
-        action: "开始分析",
-        actionFn: () => {
-          closeFeature();
-          common_vendor.index.navigateTo({ url: "/pages/astrology/natal" });
-        }
-      },
-      synastry: {
-        title: "和盘",
-        subtitle: "Synastry Chart",
-        icon: "♀",
-        color: "#60b8e0",
-        desc: "与另一个人的星盘相遇，揭示关系动力、吸引力与挑战所在。",
-        action: "开始分析",
-        actionFn: () => {
-          closeFeature();
-          common_vendor.index.navigateTo({ url: "/pages/astrology/synastry" });
-        }
-      },
-      transit: {
-        title: "流运",
-        subtitle: "Transit Reading",
-        icon: "♄",
-        color: "#ffb060",
-        desc: "当前天空行星正与你的星盘共鸣，了解近期能量流动与变化机遇。",
-        action: "开始分析",
-        actionFn: () => {
-          closeFeature();
-          common_vendor.index.navigateTo({ url: "/pages/astrology/transit" });
-        }
-      },
-      interpret: {
-        title: "解读",
-        subtitle: "AI Interpretation",
-        icon: "✦",
-        color: "#70c890",
-        desc: "由 AI 深度解读你的星盘，涵盖性格、情感、天赋、成长课题。",
-        action: "开始解读",
-        actionFn: () => {
-          closeFeature();
-          common_vendor.index.navigateTo({ url: "/pages/astrology/natal" });
-        }
-      }
-    };
+    });
     common_vendor.onMounted(async () => {
       const loggedIn = userStore.restoreFromStorage();
       if (!loggedIn) {
         common_vendor.index.reLaunch({ url: "/pages/login/index" });
         return;
       }
-      try {
-        hasNatal.value = await api_astrology.checkNatalChart();
-      } catch (e) {
-        hasNatal.value = false;
-      } finally {
-        isChecking.value = false;
+      if (!userStore.astrologyInfo) {
+        try {
+          const info = await api_astrology.getUserAstrologyInfo();
+          userStore.setAstrologyInfo(info);
+        } catch (e) {
+          common_vendor.index.__f__("warn", "at pages/astrology/index.vue:50", "[astrology/index] Failed to fetch astrology info:", e);
+        }
       }
-      startAnimation();
     });
-    common_vendor.onUnmounted(() => {
-      stopAnimation();
-    });
-    function getPlanetPos(p) {
-      const cx = 375, cy = 375;
-      if (p.orbitR === 0)
-        return { x: cx, y: cy };
-      const rad = (p.angle - 90) * Math.PI / 180;
-      return {
-        x: cx + p.orbitR * Math.cos(rad),
-        y: cy + p.orbitR * Math.sin(rad)
-      };
+    async function refreshAstrologyInfo() {
+      if (isRefreshing.value)
+        return;
+      isRefreshing.value = true;
+      try {
+        const info = await api_astrology.getUserAstrologyInfo();
+        userStore.setAstrologyInfo(info);
+        common_vendor.index.showToast({ title: "信息已刷新", icon: "success", duration: 1500 });
+      } catch {
+        common_vendor.index.showToast({ title: "刷新失败", icon: "none", duration: 1500 });
+      } finally {
+        isRefreshing.value = false;
+      }
+    }
+    function goToNatal() {
+      common_vendor.index.navigateTo({ url: "/pages/astrology/natal" });
+    }
+    function goToSynastry() {
+      common_vendor.index.navigateTo({ url: "/pages/astrology/synastry" });
+    }
+    function goToTransit() {
+      common_vendor.index.navigateTo({ url: "/pages/astrology/transit" });
+    }
+    function goToInterpret() {
+      common_vendor.index.navigateTo({ url: "/pages/astrology/natal" });
+    }
+    function goToDetail() {
+      common_vendor.index.navigateTo({ url: "/pages/astrology/transit" });
+    }
+    function goSetBirthInfo() {
+      common_vendor.index.navigateTo({ url: "/pages/astrology/natal" });
     }
     return (_ctx, _cache) => {
+      var _a, _b, _c, _d, _e, _f, _g;
       return common_vendor.e({
-        a: common_vendor.f(planets.value.filter((x) => x.orbitR > 0), (p, k0, i0) => {
-          return {
-            a: "orbit_" + p.id,
-            b: p.orbitR * 2 + "rpx",
-            c: p.orbitR * 2 + "rpx",
-            d: -p.orbitR + "rpx",
-            e: -p.orbitR + "rpx"
-          };
-        }),
-        b: common_vendor.f(planets.value, (p, k0, i0) => {
-          return common_vendor.e({
-            a: p.id === "saturn"
-          }, p.id === "saturn" ? {} : {}, {
-            b: p.id !== "earth"
-          }, p.id !== "earth" ? {
-            c: common_vendor.t(p.symbol),
-            d: Math.max(p.size * 0.9, 9) + "rpx",
-            e: p.id === "sun" ? "#7a4a00" : "rgba(255,255,255,0.9)"
-          } : {}, {
-            f: "planet_" + p.id,
-            g: p.size * 2 + "rpx",
-            h: p.size * 2 + "rpx",
-            i: getPlanetPos(p).x - p.size + "rpx",
-            j: getPlanetPos(p).y - p.size + "rpx",
-            k: p.id === "sun" ? "radial-gradient(circle at 38% 38%, #fff8d0, " + p.color + " 60%, #c07010)" : p.id === "earth" ? "radial-gradient(circle at 38% 38%, #a8dcf8, #3890c0 60%, #1a5070)" : "radial-gradient(circle at 38% 38%, " + p.color + "ee, " + p.color + "88)",
-            l: p.id === "sun" ? "0 0 28rpx " + p.color + ", 0 0 60rpx " + p.color + "66, 0 0 100rpx " + p.color + "22" : "0 0 12rpx " + p.color + "88, 0 0 24rpx " + p.color + "33",
-            m: common_vendor.o(($event) => onPlanetTap(p), "planet_" + p.id)
-          });
-        }),
-        c: common_vendor.o(($event) => openFeature("natal"), "7b"),
-        d: common_vendor.o(($event) => openFeature("synastry"), "08"),
-        e: common_vendor.o(($event) => openFeature("transit"), "5a"),
-        f: common_vendor.o(($event) => openFeature("interpret"), "68"),
-        g: !isChecking.value && !hasNatal.value
-      }, !isChecking.value && !hasNatal.value ? {
-        h: common_vendor.o(($event) => openFeature("natal"), "5b")
-      } : {}, {
-        i: showPlanetInfo.value && selectedPlanet.value
-      }, showPlanetInfo.value && selectedPlanet.value ? common_vendor.e({
-        j: common_vendor.t(selectedPlanet.value.id === "earth" ? "🌍" : selectedPlanet.value.symbol),
-        k: selectedPlanet.value.id === "earth" ? "#3890c0" : selectedPlanet.value.color,
-        l: selectedPlanet.value.color + "15",
-        m: selectedPlanet.value.color + "50",
-        n: common_vendor.t(selectedPlanet.value.name),
-        o: common_vendor.t(selectedPlanet.value.desc),
-        p: common_vendor.o(closePlanetInfo, "ce"),
-        q: selectedPlanet.value.sign
-      }, selectedPlanet.value.sign ? common_vendor.e({
-        r: common_vendor.t(selectedPlanet.value.sign),
-        s: selectedPlanet.value.house
-      }, selectedPlanet.value.house ? {
-        t: common_vendor.t(selectedPlanet.value.house)
-      } : {}, {
-        v: selectedPlanet.value.degree
-      }, selectedPlanet.value.degree ? {
-        w: common_vendor.t(selectedPlanet.value.degree)
-      } : {}) : {
-        x: common_vendor.t(selectedPlanet.value.name),
-        y: common_vendor.o(() => {
-          closePlanetInfo();
-          openFeature("natal");
-        }, "72")
+        a: hasBirth.value
+      }, hasBirth.value ? {
+        b: isRefreshing.value ? 1 : "",
+        c: common_vendor.o(refreshAstrologyInfo, "29"),
+        d: common_vendor.o(goSetBirthInfo, "8c"),
+        e: common_vendor.t(birthDisplayTime.value),
+        f: common_vendor.t((_a = birthInfo.value) == null ? void 0 : _a.birthCity),
+        g: common_vendor.t(((_b = birthInfo.value) == null ? void 0 : _b.hasNatalCache) ? "已计算" : "未计算"),
+        h: common_vendor.n(((_c = birthInfo.value) == null ? void 0 : _c.hasNatalCache) ? "badge-ready" : "badge-empty"),
+        i: common_vendor.t(((_d = birthInfo.value) == null ? void 0 : _d.hasSynastryCache) ? "已计算" : "未计算"),
+        j: common_vendor.n(((_e = birthInfo.value) == null ? void 0 : _e.hasSynastryCache) ? "badge-ready" : "badge-empty"),
+        k: common_vendor.t(((_f = birthInfo.value) == null ? void 0 : _f.hasTransitCache) ? "已计算" : "未计算"),
+        l: common_vendor.n(((_g = birthInfo.value) == null ? void 0 : _g.hasTransitCache) ? "badge-ready" : "badge-empty")
+      } : {
+        m: common_vendor.o(goSetBirthInfo, "45")
       }, {
-        z: common_vendor.o(() => {
-        }, "29"),
-        A: common_vendor.o(closePlanetInfo, "89")
-      }) : {}, {
-        B: showFeature.value
-      }, showFeature.value ? common_vendor.e({
-        C: common_vendor.o(closeFeature, "f8"),
-        D: showFeature.value && FEATURE_INFO[showFeature.value]
-      }, showFeature.value && FEATURE_INFO[showFeature.value] ? {
-        E: common_vendor.t(FEATURE_INFO[showFeature.value].icon),
-        F: FEATURE_INFO[showFeature.value].color,
-        G: FEATURE_INFO[showFeature.value].color + "15",
-        H: FEATURE_INFO[showFeature.value].color + "40",
-        I: common_vendor.t(FEATURE_INFO[showFeature.value].title),
-        J: common_vendor.t(FEATURE_INFO[showFeature.value].subtitle),
-        K: common_vendor.t(FEATURE_INFO[showFeature.value].desc),
-        L: common_vendor.t(FEATURE_INFO[showFeature.value].action),
-        M: "linear-gradient(135deg, " + FEATURE_INFO[showFeature.value].color + "bb, " + FEATURE_INFO[showFeature.value].color + ")",
-        N: common_vendor.o(
-          //@ts-ignore
-          (...args) => FEATURE_INFO[showFeature.value].actionFn && FEATURE_INFO[showFeature.value].actionFn(...args),
-          "ff"
-        )
-      } : {}, {
-        O: common_vendor.o(() => {
-        }, "63"),
-        P: common_vendor.o(closeFeature, "9a")
-      }) : {});
+        n: common_vendor.o(($event) => hasBirth.value ? null : goSetBirthInfo(), "ef"),
+        o: common_vendor.o(goToNatal, "cf"),
+        p: common_vendor.o(goToSynastry, "c2"),
+        q: common_vendor.o(goToTransit, "e6"),
+        r: common_vendor.o(goToInterpret, "38"),
+        s: common_vendor.t(monthDay),
+        t: common_vendor.t(todayFortune.value.icon),
+        v: todayFortune.value.iconBg,
+        w: common_vendor.t(todayFortune.value.planet),
+        x: common_vendor.t(todayFortune.value.sign),
+        y: common_vendor.t(todayFortune.value.summary),
+        z: common_vendor.o(goToDetail, "12"),
+        A: common_vendor.o(goToInterpret, "26")
+      });
     };
   }
 });

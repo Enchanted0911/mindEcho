@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref, watch} from 'vue'
-import {getTransitChart, interpretTransit, type TransitResponse} from '../../api/astrology'
-import {useUserStore} from '../../store/user'
+import {getTransitChart, interpretTransit, type TransitResponse} from '@/api/astrology'
+import {useUserStore} from '@/store/user'
 
 const userStore = useUserStore()
 
@@ -75,8 +75,13 @@ function prefillTransitDateFromStore() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   prefillTransitDateFromStore()
+  // 如果有出生信息且有流运缓存，自动加载（直接展示结果，无需用户手动点击）
+  const astroInfo = userStore.astrologyInfo
+  if (hasBirthInfo() && astroInfo?.hasTransitCache) {
+    await calculateTransit()
+  }
 })
 
 // ── 出生信息判断 ──────────────────────────────────
@@ -85,11 +90,6 @@ function hasBirthInfo(): boolean {
   return !!(info?.birthCity && info?.birthTime)
 }
 
-function getBirthInfoDisplay(): string {
-  const info = userStore.userInfo
-  if (!info?.birthCity || !info?.birthTime) return '未设置'
-  return `${info.birthTime} · ${info.birthCity}`
-}
 
 // ── 跳转到出生信息设置页 ──────────────────────────
 function goToNatalPage() {
@@ -199,7 +199,6 @@ const realTransitEvents = computed(() => {
     const planetsLabel = tpDisplay ? `${tpDisplay.symbol} ${tpDisplay.name}` : tpKey || '行星'
     const natalLabel   = npDisplay ? `${npDisplay.symbol} ${npDisplay.name}` : npKey || ''
     const aspectStr    = aspectLabel ? `${aspectLabel.symbol} ${aspectLabel.label}` : (aspectType || '相位')
-    const type         = aspectLabel?.harmony || 'neutral'
 
     // ── 容许度（orb）：角距，数值越小越精确 ─────────────────
     const orbVal = ev.orb ?? ev.orb_value ?? ev.exact_orb ?? null
@@ -228,6 +227,14 @@ const realTransitEvents = computed(() => {
 
     // ── tags ──────────────────────────────────────────────
     const tags: string[] = Array.isArray(ev.tags) ? ev.tags : []
+
+    // ── 结合 impact.emotion 修正 type (harmony)，影响卡片颜色 ──
+    // emotion: -1~+1；emotion <= -0.3 → challenge；emotion >= 0.3 → positive（仅在 neutral 时升级）
+    let type: 'positive' | 'challenge' | 'neutral' = aspectLabel?.harmony || 'neutral'
+    if (emotionVal != null) {
+      if (emotionVal <= -0.3 && type !== 'challenge') type = 'challenge'
+      else if (emotionVal >= 0.3 && type === 'neutral') type = 'positive'
+    }
 
     // ── 行星当前所在星座 ──────────────────────────────────
     const transitSign = zodiacZhT(ev.transit_sign || ev.t_sign || ev.sign || '')
@@ -281,60 +288,105 @@ function buildImpactDesc(
 
   // tags 取前2个翻译展示
   const tagZh: Record<string, string> = {
-    'self-other tension': '自我与他人的张力',
-    'visibility': '关注度上升',
-    'ego tension': '自我意识激活',
-    'challenge': '需要突破',
-    'inner world': '关注内心',
-    'identity focus': '聚焦自我',
-    'vitality': '活力增强',
-    'confidence': '自信增加',
-    'creative flow': '创意流动',
-    'emotional resonance': '情感共鸣',
-    'sensitivity': '感知敏锐',
-    'self-expression': '自我表达',
-    'emotional tension': '情绪波动',
-    'mood swings': '心情起伏',
-    'emotional conflict': '情感冲突',
-    'vulnerability': '脆弱感',
-    'comfort': '舒适安稳',
-    'emotional ease': '情绪轻松',
-    'career focus': '职业聚焦',
-    'mental flow': '思维流畅',
-    'insight': '洞察力强',
-    'learning': '学习成长',
-    'dialogue': '沟通顺畅',
-    'mental clarity': '思维清晰',
-    'communication': '表达沟通',
-    'debate': '思想碰撞',
-    'information conflict': '信息冲突',
-    'attraction': '魅力吸引',
-    'harmony': '和谐美好',
-    'motivation': '动力充沛',
-    'drive': '行动力强',
-    'initiative': '主动出击',
-    'action': '行动导向',
-    'conflict': '冲突张力',
-    'aggression': '冲动倾向',
-    'discipline': '自律专注',
-    'structure': '稳定建构',
+    // 自我与张力类
+    'self-other tension':    '自我与他人的张力',
+    'ego tension':           '自我意识激活',
+    'identity challenge':    '自我认知挑战',
+    'identity focus':        '聚焦自我',
+    // 注意力与表达类
+    'visibility':            '关注度上升',
+    'self-expression':       '自我表达',
+    'expression':            '表达发挥',
+    // 内心与直觉类
+    'inner world':           '关注内心',
+    'intuition':             '直觉敏锐',
+    'spirituality':          '灵性引导',
+    'confusion':             '迷茫感',
+    'self-image':            '自我形象',
+    // 活力与能量类
+    'vitality':              '活力增强',
+    'confidence':            '自信增加',
+    'creative flow':         '创意流动',
+    'creativity':            '创意迸发',
+    'originality':           '创新独创',
+    // 情感平衡类
+    'emotional resonance':   '情感共鸣',
+    'emotional flow':        '情感流动',
+    'sensitivity':           '感知敏锐',
+    'emotional tension':     '情绪波动',
+    'mood swings':           '心情起伏',
+    'emotional conflict':    '情感冲突',
+    'vulnerability':         '脆弱感',
+    'nurturing':             '滋养关爱',
+    'comfort':               '舒适安稳',
+    'emotional ease':        '情绪轻松',
+    // 职业与关注类
+    'career focus':          '职业聚焦',
+    // 思维与沟通类
+    'mental flow':           '思维流畅',
+    'mental clarity':        '思维清晰',
+    'mental tension':        '思维紧绷',
+    'insight':               '洞察力强',
+    'learning':              '学习成长',
+    'dialogue':              '沟通顺畅',
+    'communication':         '表达沟通',
+    'debate':                '思想碰撞',
+    'information conflict':  '信息冲突',
+    'miscommunication':      '沟通失误',
+    // 吸引与关系类
+    'attraction':            '魅力吸引',
+    'harmony':               '和谐美好',
+    'beauty':                '美感享受',
+    'pleasure':              '愉悦享受',
+    'social ease':           '社交顺畅',
+    'affection':             '情谊填充',
+    // 行动与动力类
+    'motivation':            '动力充沛',
+    'drive':                 '行动力强',
+    'initiative':            '主动出击',
+    'action':                '行动导向',
+    'energy surge':          '能量激涌',
+    // 冲突与张力类
+    'conflict':              '冲突张力',
+    'confrontation':         '正面对抗',
+    'tension':               '张力感',
+    'aggression':            '冲动倾向',
+    'challenge':             '需要突破',
+    'desire tension':        '欲望与身份张力',
+    'indulgence':            '放纵感官',
+    // 稳定与结构类
+    'discipline':            '自律专注',
+    'structure':             '稳定建构',
+    'restriction':           '受到制约',
     'challenge restriction': '限制挑战',
-    'restriction': '受到制约',
-    'patience': '耐心培养',
-    'responsibility': '承担责任',
-    'instability': '不稳定感',
-    'rebellion': '突破常规',
-    'revolution': '变革契机',
-    'upheaval': '翻天覆地',
-    'innovation': '创新突破',
-    'freedom': '自由解放',
-    'inspiration': '灵感涌现',
-    'compassion': '慈悲共情',
-    'intuition': '直觉敏锐',
-    'creativity': '创意迸发',
-    'evolution': '蜕变成长',
-    'transformation': '深层转化',
-    'power': '力量聚焦',
+    'patience':              '耐心培养',
+    'responsibility':        '承担责任',
+    // 变革与自由类
+    'instability':           '不稳定感',
+    'rebellion':             '突破常规',
+    'revolution':            '变革契机',
+    'upheaval':              '翻天覆地',
+    'innovation':            '创新突破',
+    'freedom':               '自由解放',
+    'awakening':             '觉醒与气场展开',
+    // 灵感与灵性类
+    'inspiration':           '灵感涌现',
+    'compassion':            '慈悲共情',
+    'opportunity':           '机遇降临',
+    // 深层转化类
+    'evolution':             '蜕变成长',
+    'transformation':        '深层转化',
+    'power':                 '力量聚焦',
+    'empowerment':           '力量觉醒',
+    'deep change':           '深层变革',
+    'power struggle':        '力量博弈',
+    'crisis':                '危机与转机',
+    'compulsion':            '执念驱动',
+    // 海王星及模糊类
+    'disillusionment':       '幻灭感',
+    'fog':                   '模糊与幻象',
+    'illusion':              '幻想与幻象',
+    'deception':             '醒觉与分辨',
   }
   const tagTexts = tags.slice(0, 2).map(t => tagZh[t] || '').filter(Boolean)
   if (tagTexts.length > 0) parts.push(...tagTexts)
@@ -350,7 +402,7 @@ function buildImpactDesc(
 }
 
 /**
- * 从 chartData.chart / summary 中提取重点流运行星（今日流运 Tab 展示）
+ * 从 chartData.summary / events 中提取重点流运行星（今日流运 Tab 展示）
  * 优先按 strength 排序，取最强的 5 个展示
  */
 const realHighlights = computed(() => {
@@ -364,7 +416,13 @@ const realHighlights = computed(() => {
       const pd = PLANET_DISPLAY_T[pKey]
       const aspectType = (h.aspect || h.aspect_type || '').toLowerCase()
       const aspectInfo = ASPECT_LABEL_T[aspectType]
-      const harmony = h.harmony || aspectInfo?.harmony || 'neutral'
+      // 结合 impact.emotion 修正 harmony：emotion < -0.3 → challenge，emotion > 0.3 → positive
+      const emotionVal: number | null = h.impact?.emotion ?? null
+      let harmony: 'positive' | 'challenge' | 'neutral' = h.harmony || aspectInfo?.harmony || 'neutral'
+      if (emotionVal != null) {
+        if (emotionVal <= -0.3 && harmony !== 'challenge') harmony = 'challenge'
+        else if (emotionVal >= 0.3 && harmony === 'neutral') harmony = 'positive'
+      }
       return {
         symbol: pd?.symbol || h.symbol || '✦',
         name: pd?.name || h.name || pKey,
@@ -373,27 +431,6 @@ const realHighlights = computed(() => {
         energy: h.energy ||
           (harmony === 'positive' ? 'positive' : harmony === 'challenge' ? 'caution' : 'deep'),
         sign: zodiacZhT(h.sign || h.transit_sign || ''),
-        strength: null,
-      }
-    })
-  }
-
-  // ── 次优：chart.transits ──────────────────────────────
-  const chartTransits = (chartData.value?.chart as any)?.transits
-  if (chartTransits && Array.isArray(chartTransits) && chartTransits.length > 0) {
-    return chartTransits.slice(0, 4).map((t: any) => {
-      const pKey = (t.planet || t.body || t.transit_planet || '').toLowerCase().trim()
-      const pd = PLANET_DISPLAY_T[pKey]
-      const aspectType = (t.aspect || t.aspect_type || t.type || '').toLowerCase()
-      const aspectInfo = ASPECT_LABEL_T[aspectType]
-      const harmony = aspectInfo?.harmony || 'neutral'
-      return {
-        symbol: pd?.symbol || '✦',
-        name: pd?.name || pKey,
-        aspect: aspectInfo ? `${aspectInfo.symbol} ${aspectInfo.label}` : (aspectType || ''),
-        impact: t.description || t.interpretation || t.impact || '',
-        energy: harmony === 'positive' ? 'positive' : harmony === 'challenge' ? 'caution' : 'deep',
-        sign: zodiacZhT(t.sign || t.transit_sign || ''),
         strength: null,
       }
     })
@@ -423,12 +460,18 @@ const realHighlights = computed(() => {
     const npDisplay = PLANET_DISPLAY_T[npKey]
     const aspectType = (ev.aspect_type || ev.aspect || ev.type || '').toLowerCase().trim()
     const aspectInfo = ASPECT_LABEL_T[aspectType]
-    const harmony = aspectInfo?.harmony || 'neutral'
-    const energy = harmony === 'positive' ? 'positive' : harmony === 'challenge' ? 'caution' : 'deep'
 
     const impact = ev.impact || {}
     const emotionVal: number | null = impact.emotion ?? null
     const pressureVal: number | null = impact.pressure ?? null
+
+    // 结合 impact.emotion 修正 harmony：emotion < -0.3 → challenge，emotion > 0.3 → positive
+    let harmony: 'positive' | 'challenge' | 'neutral' = aspectInfo?.harmony || 'neutral'
+    if (emotionVal != null) {
+      if (emotionVal <= -0.3 && harmony !== 'challenge') harmony = 'challenge'
+      else if (emotionVal >= 0.3 && harmony === 'neutral') harmony = 'positive'
+    }
+    const energy = harmony === 'positive' ? 'positive' : harmony === 'challenge' ? 'caution' : 'deep'
     const durationDays: number | null = impact.duration_days ?? ev.duration_days ?? null
     const tags: string[] = Array.isArray(ev.tags) ? ev.tags : []
     const strengthPct = ev.strength != null ? Math.round(Number(ev.strength) * 100) : null
@@ -558,10 +601,11 @@ const realEnergy = computed(() => {
     const ac = sum.action_energy ?? sum.action_score ?? null
     const so = sum.social_energy ?? sum.social_score ?? null
 
-    if (ov != null && !isNaN(Number(ov))) overall = Math.round(Number(ov))
-    if (em != null && !isNaN(Number(em))) emotion = Math.round(Number(em))
-    if (ac != null && !isNaN(Number(ac))) action = Math.round(Number(ac))
-    if (so != null && !isNaN(Number(so))) social = Math.round(Number(so))
+    const clamp = (v: number) => Math.min(100, Math.max(0, Math.round(v)))
+    if (ov != null && !isNaN(Number(ov))) overall = clamp(Number(ov))
+    if (em != null && !isNaN(Number(em))) emotion = clamp(Number(em))
+    if (ac != null && !isNaN(Number(ac))) action = clamp(Number(ac))
+    if (so != null && !isNaN(Number(so))) social = clamp(Number(so))
 
     // ── 降级：energy_level 文字型 → 百分比 ─────────────────
     if (overall == null) {
@@ -582,19 +626,19 @@ const realEnergy = computed(() => {
         .map(Number)
       if (emVals.length > 0) {
         const avg = emVals.reduce((a: number, b: number) => a + b, 0) / emVals.length
-        // emotion 范围 -1~+1，转换为 0-100
-        emotion = Math.round((avg + 1) / 2 * 100)
+        // emotion 范围 -1~+1，转换为 0-100，clamp 防止异常值
+        emotion = Math.min(100, Math.max(0, Math.round((avg + 1) / 2 * 100)))
       }
     }
     if (action == null) {
-      // 用 pressure 均值近似 action
+      // 用 pressure 均值近似 action；pressure 范围 0-1，乘以 100 转百分比
       const prVals = events
         .map((ev: any) => ev.impact?.pressure)
         .filter((v: any) => v != null && !isNaN(Number(v)))
         .map(Number)
       if (prVals.length > 0) {
         const avg = prVals.reduce((a: number, b: number) => a + b, 0) / prVals.length
-        action = Math.round(avg * 100)
+        action = Math.min(100, Math.max(0, Math.round(avg * 100)))
       }
     }
   }
@@ -604,17 +648,9 @@ const realEnergy = computed(() => {
 })
 
 async function calculateTransit() {
-  // 检查是否设置了出生信息
+  // 检查是否设置了出生信息（未设置则直接在 form 页展示友好占位，不弹窗）
   if (!hasBirthInfo()) {
-    uni.showModal({
-      title: '未设置出生信息',
-      content: '流运解读需要先设置出生信息，是否前往本命盘页面设置？',
-      confirmText: '去设置',
-      cancelText: '取消',
-      success: (res) => {
-        if (res.confirm) goToNatalPage()
-      }
-    })
+    step.value = 'form'
     return
   }
 
@@ -624,29 +660,22 @@ async function calculateTransit() {
   const timer = setInterval(() => { loadingText.value = TEXTS[++idx % TEXTS.length] }, 1400)
   try {
     // 出生信息由后端从 user 表读取，前端传入用户选择的目标日期
-    const result = await getTransitChart({ targetDate: targetDateStr.value })
-    chartData.value = result
+    chartData.value = await getTransitChart({ targetDate: targetDateStr.value })
 
     // 计算成功后，将目标日期持久化到 userStore（本地缓存，方便下次回填）
     // 后端 AstrologyGatewayService 已自动写入 DB，此处同步到前端 store
     userStore.updateTransitDate(targetDateStr.value)
+    // 更新缓存标志位
+    userStore.updateAstrologyCache({ hasTransitCache: true })
   } catch (e: any) {
-    // 如果是出生信息未设置的错误（7001），提示去设置
+    // 如果是出生信息未设置的错误（7001），直接回到 form 展示友好占位
     if (e?.code === 7001 || e?.message?.includes('出生信息')) {
       step.value = 'form'
-      uni.showModal({
-        title: '未设置出生信息',
-        content: '请先设置出生信息再计算流运',
-        confirmText: '去设置',
-        cancelText: '取消',
-        success: (res) => {
-          if (res.confirm) goToNatalPage()
-        }
-      })
+      userStore.updateAstrologyCache({ hasTransitCache: false })
       clearInterval(timer)
       return
     }
-    chartData.value = { events: [], summary: null, chart: null }
+    chartData.value = { events: [], summary: null }
   } finally {
     clearInterval(timer)
     step.value = 'result'
@@ -805,8 +834,8 @@ function goInterpret() {
 
         <view v-else class="birth-empty" @click="goToNatalPage">
           <text class="birth-empty-icon">✦</text>
-          <text class="birth-empty-title">点击设置出生信息</text>
-          <text class="birth-empty-hint">设置后才能进行流运解读</text>
+          <text class="birth-empty-title">尚未设置出生信息</text>
+          <text class="birth-empty-hint">前往本命盘页面设置，或在星盘首页统一设置</text>
         </view>
       </view>
 

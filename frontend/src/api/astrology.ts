@@ -97,15 +97,44 @@ export interface NatalChartData {
   [key: string]: any
 }
 
-/** 本命盘 summary（Python 返回） */
+/** 本命盘 summary 中单个天体/角点数据 */
+export interface NatalSummaryBody {
+  sign?: string
+  degree?: number
+  absolute_degree?: number
+  house?: number
+  retrograde?: boolean
+  speed?: number
+  [key: string]: any
+}
+
+/**
+ * 本命盘 summary（Python 返回，包含在 natal_chart_data 中）
+ *
+ * 实际数据结构示例：
+ * ```json
+ * {
+ *   "sun":       { "sign": "Libra",       "degree": 20.57, "house": 7, ... },
+ *   "moon":      { "sign": "Sagittarius", "degree": 15.28, "house": 9, ... },
+ *   "ascendant": { "sign": "Aries",       "degree": 1.85,  ... },
+ *   "metadata":  { "timezone": "Asia/Shanghai", ... }
+ * }
+ * ```
+ */
 export interface NatalSummary {
-  sun_sign?: string
-  moon_sign?: string
-  rising_sign?: string  // 上升星座
-  dominant_element?: string
-  dominant_quality?: string
-  description?: string
-  highlights?: any[]
+  sun?: NatalSummaryBody
+  moon?: NatalSummaryBody
+  ascendant?: NatalSummaryBody
+  metadata?: {
+    julian_day?: number
+    timezone?: string
+    lat?: number
+    lng?: number
+    zodiac?: string
+    house_system?: string
+    node_type?: string
+    [key: string]: any
+  }
   [key: string]: any
 }
 
@@ -176,10 +205,16 @@ export interface TransitEventData {
 
 /** 流运 summary（Python 返回） */
 export interface TransitSummary {
-  overall_energy?: number; overall_score?: number; energy_level?: number
+  overall_energy?: number; overall_score?: number
+  /** energy_level 可以是数值（0-100）或字符串（"high" / "medium" / "low" 等） */
+  energy_level?: number | string
   emotion_energy?: number; emotional_energy?: number
   action_energy?: number; action_score?: number
   social_energy?: number; social_score?: number
+  /** emotional_state：当前情绪状态描述（"positive" / "negative" / "neutral" 等） */
+  emotional_state?: string
+  /** life_focus：当前生活焦点描述（"inner world" / "relationships" / "career" 等） */
+  life_focus?: string
   highlights?: any[]; key_planets?: any[]; featured_planets?: any[]
   key_themes?: any[]; themes?: any[]; focus_areas?: any[]
   description?: string; overview?: string; summary_text?: string
@@ -189,7 +224,6 @@ export interface TransitSummary {
 export interface TransitResponse {
   events: TransitEventData[]
   summary: TransitSummary | null
-  chart: any | null
 }
 
 export interface InterpretResponse {
@@ -200,7 +234,48 @@ export interface InterpretResponse {
   ragFused: boolean
 }
 
+/**
+ * 用户星盘信息汇总（对应后端 UserAstrologyInfoDTO）
+ * 登录后通过 GET /astrology/info 一次性获取，缓存到 store
+ */
+export interface UserAstrologyInfo {
+  /** 出生城市名称（null 表示未设置） */
+  birthCity?: string | null
+  /** 出生地纬度 */
+  birthLat?: number | null
+  /** 出生地经度 */
+  birthLng?: number | null
+  /** 出生时间 yyyy-MM-dd HH:mm（null 表示未设置） */
+  birthTime?: string | null
+  /** 是否存在本命盘缓存 */
+  hasNatalCache: boolean
+  /** 是否存在和盘缓存 */
+  hasSynastryCache: boolean
+  /** 是否存在流运缓存 */
+  hasTransitCache: boolean
+  /** 最近一次和盘对方昵称 */
+  synastryPartnerName?: string | null
+  /** 最近一次和盘对方出生城市 */
+  synastryPartnerCity?: string | null
+  /** 最近一次和盘对方出生地纬度 */
+  synastryPartnerLat?: number | null
+  /** 最近一次和盘对方出生地经度 */
+  synastryPartnerLng?: number | null
+  /** 最近一次和盘对方出生时间 yyyy-MM-dd HH:mm */
+  synastryPartnerTime?: string | null
+  /** 最近一次流运查询的目标日期 yyyy-MM-dd */
+  transitTargetDate?: string | null
+}
+
 // ─────────────────────── API 方法 ───────────────────────
+
+/**
+ * 一次获取完整用户星盘信息（登录后/进入星盘页时调用）
+ * 返回出生信息、缓存标志位、对方信息、流运日期等
+ */
+export function getUserAstrologyInfo(): Promise<UserAstrologyInfo> {
+  return get<UserAstrologyInfo>('/astrology/info')
+}
 
 /**
  * 计算本命盘

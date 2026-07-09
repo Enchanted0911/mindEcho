@@ -1,5 +1,6 @@
 import {defineStore} from 'pinia'
 import {computed, ref} from 'vue'
+import type {UserAstrologyInfo} from '@/api/astrology'
 
 export interface UserInfo {
   id: string   // 后端 Long 序列化为字符串，防止 JS 精度丢失
@@ -37,10 +38,20 @@ export interface UserInfo {
 export const useUserStore = defineStore('user', () => {
   const token = ref<string>('')
   const userInfo = ref<UserInfo | null>(null)
+  /** 星盘信息汇总（登录后/进入星盘页时从 GET /astrology/info 获取并缓存） */
+  const astrologyInfo = ref<UserAstrologyInfo | null>(null)
 
   const isLoggedIn = computed(() => !!token.value)
   const isVip = computed(() => userInfo.value?.isVip ?? false)
   const currentPersonality = computed(() => userInfo.value?.aiPersonality ?? 'gentle_female')
+  /** 是否已设置出生信息（从 astrologyInfo 中读取，确保与后端同步） */
+  const hasBirthInfo = computed(() =>
+    !!(astrologyInfo.value?.birthCity && astrologyInfo.value?.birthTime)
+  )
+  /** 是否已设置和盘对方信息 */
+  const hasSynastryPartner = computed(() =>
+    !!(astrologyInfo.value?.synastryPartnerCity && astrologyInfo.value?.synastryPartnerTime)
+  )
 
   function setToken(newToken: string) {
     token.value = newToken
@@ -52,11 +63,45 @@ export const useUserStore = defineStore('user', () => {
     uni.setStorageSync('userInfo', JSON.stringify(info))
   }
 
+  /**
+   * 设置星盘信息汇总（登录后由调用方通过 GET /astrology/info 获取后写入）
+   */
+  function setAstrologyInfo(info: UserAstrologyInfo) {
+    astrologyInfo.value = info
+    uni.setStorageSync('astrologyInfo', JSON.stringify(info))
+    // 同步回填到 userInfo 中，兼容现有代码的 userStore.userInfo.birthCity 读取
+    if (userInfo.value) {
+      userInfo.value.birthCity = info.birthCity ?? null
+      userInfo.value.birthLat = info.birthLat ?? null
+      userInfo.value.birthLng = info.birthLng ?? null
+      userInfo.value.birthTime = info.birthTime ?? null
+      userInfo.value.synastryPartnerName = info.synastryPartnerName ?? null
+      userInfo.value.synastryPartnerCity = info.synastryPartnerCity ?? null
+      userInfo.value.synastryPartnerLat = info.synastryPartnerLat ?? null
+      userInfo.value.synastryPartnerLng = info.synastryPartnerLng ?? null
+      userInfo.value.synastryPartnerTime = info.synastryPartnerTime ?? null
+      userInfo.value.transitTargetDate = info.transitTargetDate ?? null
+      uni.setStorageSync('userInfo', JSON.stringify(userInfo.value))
+    }
+  }
+
+  /**
+   * 更新星盘缓存标志位（出生信息/和盘/流运接口返回后刷新）
+   */
+  function updateAstrologyCache(patch: Partial<UserAstrologyInfo>) {
+    if (astrologyInfo.value) {
+      astrologyInfo.value = { ...astrologyInfo.value, ...patch }
+      uni.setStorageSync('astrologyInfo', JSON.stringify(astrologyInfo.value))
+    }
+  }
+
   function logout() {
     token.value = ''
     userInfo.value = null
+    astrologyInfo.value = null
     uni.removeStorageSync('token')
     uni.removeStorageSync('userInfo')
+    uni.removeStorageSync('astrologyInfo')
     uni.reLaunch({ url: '/pages/login/index' })
   }
 
@@ -121,10 +166,14 @@ export const useUserStore = defineStore('user', () => {
     try {
       const savedToken = uni.getStorageSync('token')
       const savedUserInfoStr = uni.getStorageSync('userInfo')
+      const savedAstrologyInfoStr = uni.getStorageSync('astrologyInfo')
       if (savedToken) {
         token.value = savedToken
         if (savedUserInfoStr) {
           userInfo.value = JSON.parse(savedUserInfoStr) as UserInfo
+        }
+        if (savedAstrologyInfoStr) {
+          astrologyInfo.value = JSON.parse(savedAstrologyInfoStr) as UserAstrologyInfo
         }
         return true
       }
@@ -137,11 +186,16 @@ export const useUserStore = defineStore('user', () => {
   return {
     token,
     userInfo,
+    astrologyInfo,
     isLoggedIn,
     isVip,
     currentPersonality,
+    hasBirthInfo,
+    hasSynastryPartner,
     setToken,
     setUserInfo,
+    setAstrologyInfo,
+    updateAstrologyCache,
     logout,
     updatePersonality,
     updateBirthInfo,

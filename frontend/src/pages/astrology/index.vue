@@ -1,531 +1,559 @@
 <script setup lang="ts">
-import {onMounted, onUnmounted, ref} from 'vue'
-import {checkNatalChart} from '../../api/astrology'
-import {useUserStore} from '../../store/user'
+import {computed, onMounted, ref} from 'vue'
+import {getUserAstrologyInfo} from '@/api/astrology'
+import {useUserStore} from '@/store/user'
 
 const userStore = useUserStore()
-const hasNatal = ref(false)
-const isChecking = ref(true)
 
-// ── 太阳系行星数据 ─────────────────────────────
-interface Planet {
-  id: string
-  name: string
-  symbol: string
-  color: string
-  size: number       // 行星显示半径 rpx
-  orbitR: number     // 轨道半径（相对中心，rpx单位，0 = 太阳）
-  speed: number      // 公转速度（度/秒）
-  angle: number      // 当前角度（度）
-  desc: string       // 描述
-  sign?: string      // 星座（从后端数据获取）
-  house?: string
-  degree?: string
-}
+// ── 今日日期 ─────────────────────────────────
+const today = new Date()
+const monthDay = `${today.getMonth() + 1}月${today.getDate()}日`
 
-const PLANETS: Planet[] = [
-  {
-    id: 'sun',   name: '太阳', symbol: '☉', color: '#FFD060',
-    size: 26,    orbitR: 0,    speed: 0,      angle: 0,
-    desc: '生命力与自我核心'
-  },
-  {
-    id: 'mercury', name: '水星', symbol: '☿', color: '#B0C8E0',
-    size: 9,     orbitR: 80,   speed: 1.8,    angle: 30,
-    desc: '思维、沟通与学习'
-  },
-  {
-    id: 'venus', name: '金星', symbol: '♀', color: '#FFB8A8',
-    size: 13,    orbitR: 120,  speed: 1.2,    angle: 80,
-    desc: '爱、美与价值观'
-  },
-  {
-    id: 'earth', name: '地球', symbol: '🌍', color: '#60B8E0',
-    size: 13,    orbitR: 165,  speed: 0.9,    angle: 150,
-    desc: '你所在的世界'
-  },
-  {
-    id: 'moon',  name: '月亮', symbol: '☽', color: '#D8D0FF',
-    size: 9,     orbitR: 190,  speed: 2.5,    angle: 60,
-    desc: '情感、直觉与潜意识'
-  },
-  {
-    id: 'mars',  name: '火星', symbol: '♂', color: '#FF8070',
-    size: 11,    orbitR: 230,  speed: 0.55,   angle: 220,
-    desc: '行动力、欲望与冲突'
-  },
-  {
-    id: 'jupiter', name: '木星', symbol: '♃', color: '#E0C090',
-    size: 20,    orbitR: 285,  speed: 0.22,   angle: 310,
-    desc: '幸运、扩展与哲学'
-  },
-  {
-    id: 'saturn', name: '土星', symbol: '♄', color: '#C8B890',
-    size: 17,    orbitR: 335,  speed: 0.12,   angle: 180,
-    desc: '规则、纪律与命运课题'
-  },
-]
+// ── 刷新中状态 ────────────────────────────────
+const isRefreshing = ref(false)
 
-// 动画状态
-const planets = ref<Planet[]>(PLANETS.map(p => ({...p})))
-let animTimer: any = null
+// ── 今日运势示例数据 ──────────────────────────
+const todayFortune = ref({
+  planet: '太阳',
+  sign: '天蝎座',
+  icon: '🔥',
+  iconBg: '#E07428',
+  summary: '今天能量转向深层探索，适合进行内省或处理复杂的财务问题。直觉力增强，相信你的第一感...',
+})
 
-function startAnimation() {
-  animTimer = setInterval(() => {
-    planets.value.forEach(p => {
-      if (p.orbitR > 0) {
-        p.angle = (p.angle + p.speed * 0.12) % 360
-      }
-    })
-  }, 50)
-}
-
-function stopAnimation() {
-  if (animTimer) clearInterval(animTimer)
-}
-
-// ── 点击行星弹出信息 ──────────────────────────
-const selectedPlanet = ref<Planet | null>(null)
-const showPlanetInfo = ref(false)
-
-function onPlanetTap(planet: Planet) {
-  selectedPlanet.value = planet
-  showPlanetInfo.value = true
-}
-
-function closePlanetInfo() {
-  showPlanetInfo.value = false
-  selectedPlanet.value = null
-}
-
-// ── 四角功能弹层 ──────────────────────────────
-type FeatureKey = 'natal' | 'synastry' | 'transit' | 'interpret'
-const showFeature = ref<FeatureKey | null>(null)
-
-function openFeature(key: FeatureKey) {
-  showFeature.value = key
-}
-
-function closeFeature() {
-  showFeature.value = null
-}
-
-const FEATURE_INFO = {
-  natal: {
-    title: '本命盘',
-    subtitle: 'Natal Chart',
-    icon: '☉',
-    color: '#9b87d1',
-    desc: '探索你的星盘结构、行星能量与人生底色，了解性格深层动力。',
-    action: '开始分析',
-    actionFn: () => { closeFeature(); uni.navigateTo({ url: '/pages/astrology/natal' }) }
-  },
-  synastry: {
-    title: '和盘',
-    subtitle: 'Synastry Chart',
-    icon: '♀',
-    color: '#60b8e0',
-    desc: '与另一个人的星盘相遇，揭示关系动力、吸引力与挑战所在。',
-    action: '开始分析',
-    actionFn: () => { closeFeature(); uni.navigateTo({ url: '/pages/astrology/synastry' }) }
-  },
-  transit: {
-    title: '流运',
-    subtitle: 'Transit Reading',
-    icon: '♄',
-    color: '#ffb060',
-    desc: '当前天空行星正与你的星盘共鸣，了解近期能量流动与变化机遇。',
-    action: '开始分析',
-    actionFn: () => { closeFeature(); uni.navigateTo({ url: '/pages/astrology/transit' }) }
-  },
-  interpret: {
-    title: '解读',
-    subtitle: 'AI Interpretation',
-    icon: '✦',
-    color: '#70c890',
-    desc: '由 AI 深度解读你的星盘，涵盖性格、情感、天赋、成长课题。',
-    action: '开始解读',
-    actionFn: () => { closeFeature(); uni.navigateTo({ url: '/pages/astrology/natal' }) }
-  }
-}
+// ── 用户出生信息摘要（从 astrologyInfo 读取） ──
+const birthInfo = computed(() => userStore.astrologyInfo)
+const hasBirth = computed(() => !!(birthInfo.value?.birthCity && birthInfo.value?.birthTime))
+const birthDisplayTime = computed(() => {
+  const t = birthInfo.value?.birthTime
+  if (!t) return null
+  // yyyy-MM-dd HH:mm → yyyy年M月d日 HH:mm
+  try {
+    const [date, time] = t.split(' ')
+    const [y, m, d] = date.split('-').map(Number)
+    return `${y}年${m}月${d}日 ${time}`
+  } catch { return t }
+})
 
 onMounted(async () => {
-  // ── 登录状态检查 ─────────────────────────────────
-  // 小程序冷启动后 Pinia 内存中的 token 为空，先尝试从 Storage 恢复。
-  // 若 Storage 中也没有 token，说明用户未登录，跳转到登录页。
   const loggedIn = userStore.restoreFromStorage()
   if (!loggedIn) {
     uni.reLaunch({ url: '/pages/login/index' })
     return
   }
-
-  // ── 检查本命盘是否已建立 ─────────────────────────
-  try {
-    hasNatal.value = await checkNatalChart()
-  } catch (e) {
-    // token 有效但 API 失败（如网络错误），不影响页面展示，hasNatal 默认 false
-    hasNatal.value = false
-  } finally {
-    isChecking.value = false
+  // 如果没有 astrologyInfo（首次进入或 store 过期），从后端刷新
+  if (!userStore.astrologyInfo) {
+    try {
+      const info = await getUserAstrologyInfo()
+      userStore.setAstrologyInfo(info)
+    } catch (e) {
+      console.warn('[astrology/index] Failed to fetch astrology info:', e)
+    }
   }
-  startAnimation()
 })
 
-onUnmounted(() => {
-  stopAnimation()
-})
-
-// 计算行星位置（画布中心 = 375, 375rpx）
-function getPlanetPos(p: Planet) {
-  const cx = 375, cy = 375
-  if (p.orbitR === 0) return { x: cx, y: cy }
-  const rad = (p.angle - 90) * Math.PI / 180
-  return {
-    x: cx + p.orbitR * Math.cos(rad),
-    y: cy + p.orbitR * Math.sin(rad)
+/** 刷新星盘信息（手动拉取最新状态） */
+async function refreshAstrologyInfo() {
+  if (isRefreshing.value) return
+  isRefreshing.value = true
+  try {
+    const info = await getUserAstrologyInfo()
+    userStore.setAstrologyInfo(info)
+    uni.showToast({ title: '信息已刷新', icon: 'success', duration: 1500 })
+  } catch {
+    uni.showToast({ title: '刷新失败', icon: 'none', duration: 1500 })
+  } finally {
+    isRefreshing.value = false
   }
 }
+
+// ── 功能卡片导航 ──────────────────────────────
+function goToNatal()    { uni.navigateTo({ url: '/pages/astrology/natal' }) }
+function goToSynastry() { uni.navigateTo({ url: '/pages/astrology/synastry' }) }
+function goToTransit()  { uni.navigateTo({ url: '/pages/astrology/transit' }) }
+function goToInterpret(){ uni.navigateTo({ url: '/pages/astrology/natal' }) }
+function goToDetail()   { uni.navigateTo({ url: '/pages/astrology/transit' }) }
+/** 跳转到本命盘页设置出生信息 */
+function goSetBirthInfo() { uni.navigateTo({ url: '/pages/astrology/natal' }) }
 </script>
 
 <template>
-  <view class="solar-page">
+  <scroll-view class="astro-page" scroll-y>
 
-    <!-- ░░ 星空背景装饰粒子 ░░ -->
-    <view class="star-bg">
-      <view class="star-dot s1" />
-      <view class="star-dot s2" />
-      <view class="star-dot s3" />
-      <view class="star-dot s4" />
-      <view class="star-dot s5" />
-      <view class="star-dot s6" />
-      <view class="star-dot s7" />
-      <view class="star-dot s8" />
-      <view class="nebula-glow ng1" />
-      <view class="nebula-glow ng2" />
-    </view>
-
-    <!-- ░░ 顶部标题栏 ░░ -->
-    <view class="top-bar">
-      <view class="top-bar-inner">
-        <view class="top-badge">AI 星盘</view>
-        <text class="top-title">星屿占星</text>
-        <text class="top-sub">探索宇宙，认识自己</text>
+    <!-- ░░ 太阳系动画区 ░░ -->
+    <view class="solar-hero">
+      <!-- 星空背景粒子 -->
+      <view class="starfield">
+        <view class="star star-1" />
+        <view class="star star-2" />
+        <view class="star star-3" />
+        <view class="star star-4" />
+        <view class="star star-5" />
+        <view class="star star-6" />
+        <view class="star star-7" />
+        <view class="star star-8" />
+        <view class="star star-9" />
+        <view class="star star-10" />
+        <view class="star star-11" />
+        <view class="star star-12" />
       </view>
-    </view>
 
-    <!-- ░░ 太阳系画布 ░░ -->
-    <view class="solar-canvas-wrap">
       <!-- 轨道圈 -->
-      <view
-        v-for="p in planets.filter(x => x.orbitR > 0)"
-        :key="'orbit_' + p.id"
-        class="orbit-ring"
-        :style="{
-          width: p.orbitR * 2 + 'rpx',
-          height: p.orbitR * 2 + 'rpx',
-          marginLeft: -(p.orbitR) + 'rpx',
-          marginTop: -(p.orbitR) + 'rpx',
-        }"
-      />
+      <view class="orbit orbit-1" />
+      <view class="orbit orbit-2" />
+      <view class="orbit orbit-3" />
+      <view class="orbit orbit-4" />
 
-      <!-- 行星 -->
-      <view
-        v-for="p in planets"
-        :key="'planet_' + p.id"
-        class="planet-node"
-        :style="{
-          width: p.size * 2 + 'rpx',
-          height: p.size * 2 + 'rpx',
-          left: getPlanetPos(p).x - p.size + 'rpx',
-          top: getPlanetPos(p).y - p.size + 'rpx',
-          background: p.id === 'sun'
-            ? 'radial-gradient(circle at 38% 38%, #fff8d0, ' + p.color + ' 60%, #c07010)'
-            : p.id === 'earth'
-            ? 'radial-gradient(circle at 38% 38%, #a8dcf8, #3890c0 60%, #1a5070)'
-            : 'radial-gradient(circle at 38% 38%, ' + p.color + 'ee, ' + p.color + '88)',
-          boxShadow: p.id === 'sun'
-            ? '0 0 28rpx ' + p.color + ', 0 0 60rpx ' + p.color + '66, 0 0 100rpx ' + p.color + '22'
-            : '0 0 12rpx ' + p.color + '88, 0 0 24rpx ' + p.color + '33'
-        }"
-        @tap="onPlanetTap(p)"
-      >
-        <!-- 土星环 -->
-        <view v-if="p.id === 'saturn'" class="saturn-ring" />
-        <!-- 行星符号 -->
-        <text v-if="p.id !== 'earth'" class="planet-label" :style="{ fontSize: Math.max(p.size * 0.9, 9) + 'rpx', color: p.id === 'sun' ? '#7a4a00' : 'rgba(255,255,255,0.9)' }">
-          {{ p.symbol }}
-        </text>
+      <!-- 太阳（中心，带光晕脉冲） -->
+      <view class="sun-wrap">
+        <view class="sun-glow" />
+        <view class="sun-core">
+          <text class="sun-emoji">☀️</text>
+        </view>
       </view>
 
-      <!-- 四角功能按钮 -->
-      <!-- 左上: 本命 -->
-      <view class="corner-btn btn-tl" @tap="openFeature('natal')">
-        <view class="corner-icon-wrap" style="background: rgba(155,135,209,0.12); border-color: rgba(155,135,209,0.4)">
-          <text class="corner-icon" style="color:#c4b4f0">☉</text>
+      <!-- 水星 -->
+      <view class="planet-track track-mercury">
+        <view class="planet planet-mercury">
+          <view class="planet-dot mercury-dot" />
         </view>
-        <text class="corner-label">本命</text>
       </view>
 
-      <!-- 右上: 和盘 -->
-      <view class="corner-btn btn-tr" @tap="openFeature('synastry')">
-        <view class="corner-icon-wrap" style="background: rgba(96,184,224,0.12); border-color: rgba(96,184,224,0.4)">
-          <text class="corner-icon" style="color:#80d0f4">♀</text>
+      <!-- 金星 -->
+      <view class="planet-track track-venus">
+        <view class="planet planet-venus">
+          <view class="planet-dot venus-dot" />
         </view>
-        <text class="corner-label">和盘</text>
       </view>
 
-      <!-- 左下: 流运 -->
-      <view class="corner-btn btn-bl" @tap="openFeature('transit')">
-        <view class="corner-icon-wrap" style="background: rgba(255,176,96,0.12); border-color: rgba(255,176,96,0.4)">
-          <text class="corner-icon" style="color:#ffc878">♄</text>
+      <!-- 地球（带月亮） -->
+      <view class="planet-track track-earth">
+        <view class="planet planet-earth">
+          <view class="planet-dot earth-dot">
+            <view class="moon-track">
+              <view class="moon-dot" />
+            </view>
+          </view>
         </view>
-        <text class="corner-label">流运</text>
       </view>
 
-      <!-- 右下: 解读 -->
-      <view class="corner-btn btn-br" @tap="openFeature('interpret')">
-        <view class="corner-icon-wrap" style="background: rgba(112,200,144,0.12); border-color: rgba(112,200,144,0.4)">
-          <text class="corner-icon" style="color:#90e0b4">✦</text>
+      <!-- 火星 -->
+      <view class="planet-track track-mars">
+        <view class="planet planet-mars">
+          <view class="planet-dot mars-dot" />
         </view>
-        <text class="corner-label">解读</text>
+      </view>
+
+      <!-- 标题叠加 -->
+      <view class="hero-overlay">
+        <text class="hero-title">探索你的星图</text>
+        <text class="hero-sub">连接宇宙能量，解读生命密码</text>
       </view>
     </view>
 
-    <!-- ░░ 底部提示语 ░░ -->
-    <view class="bottom-hint">
-      <text class="hint-text">✦ 点击行星查看星位 · 点击角落开始解读 ✦</text>
-    </view>
-
-    <!-- ░░ 建立星盘提示（未建立本命盘时） ░░ -->
-    <view v-if="!isChecking && !hasNatal" class="natal-prompt" @tap="openFeature('natal')">
-      <view class="prompt-glow" />
-      <text class="prompt-icon">🌟</text>
-      <view class="prompt-content">
-        <text class="prompt-title">建立你的星盘</text>
-        <text class="prompt-desc">录入出生信息，解锁个性化占星</text>
-      </view>
-      <text class="prompt-arrow">›</text>
-    </view>
-
-    <!-- ══════════════════════════════════════
-         行星信息弹窗
-    ══════════════════════════════════════ -->
-    <view v-if="showPlanetInfo && selectedPlanet" class="planet-popup-overlay" @tap="closePlanetInfo">
-      <view class="planet-popup" @tap.stop>
-        <view class="popup-drag-bar" />
-        <view class="planet-popup-header">
-          <view class="planet-popup-icon" :style="{ background: selectedPlanet.color + '15', borderColor: selectedPlanet.color + '50' }">
-            <text class="planet-popup-symbol" :style="{ color: selectedPlanet.id === 'earth' ? '#3890c0' : selectedPlanet.color }">
-              {{ selectedPlanet.id === 'earth' ? '🌍' : selectedPlanet.symbol }}
-            </text>
+    <!-- ░░ 用户星盘状态卡片（统一出生信息设置入口） ░░ -->
+    <view class="user-astro-card" @tap="hasBirth ? null : goSetBirthInfo()">
+      <!-- 已设置出生信息 -->
+      <template v-if="hasBirth">
+        <view class="uac-header">
+          <view class="uac-left">
+            <text class="uac-icon">🌟</text>
+            <text class="uac-title">我的星盘信息</text>
           </view>
-          <view class="planet-popup-meta">
-            <text class="planet-popup-name">{{ selectedPlanet.name }}</text>
-            <text class="planet-popup-desc">{{ selectedPlanet.desc }}</text>
-          </view>
-          <view class="popup-close" @tap="closePlanetInfo">✕</view>
-        </view>
-
-        <view v-if="selectedPlanet.sign" class="planet-pos-info">
-          <view class="pos-item">
-            <text class="pos-label">星座</text>
-            <text class="pos-val">{{ selectedPlanet.sign }}</text>
-          </view>
-          <view v-if="selectedPlanet.house" class="pos-item">
-            <text class="pos-label">宫位</text>
-            <text class="pos-val">{{ selectedPlanet.house }}</text>
-          </view>
-          <view v-if="selectedPlanet.degree" class="pos-item">
-            <text class="pos-label">度数</text>
-            <text class="pos-val">{{ selectedPlanet.degree }}</text>
+          <view class="uac-actions">
+            <view class="uac-refresh-btn" :class="{ spinning: isRefreshing }" @tap.stop="refreshAstrologyInfo">
+              <text class="uac-refresh-icon">↻</text>
+            </view>
+            <view class="uac-edit-btn" @tap.stop="goSetBirthInfo">
+              <text class="uac-edit-text">修改</text>
+            </view>
           </view>
         </view>
-        <view v-else class="planet-no-data">
-          <text class="no-data-text">建立本命盘后可查看你的{{ selectedPlanet.name }}星位</text>
-          <view class="no-data-btn" @tap="() => { closePlanetInfo(); openFeature('natal') }">
-            <text>去建立本命盘 →</text>
+        <view class="uac-birth-info">
+          <view class="uac-info-row">
+            <text class="uac-info-key">🕐 出生时间</text>
+            <text class="uac-info-val">{{ birthDisplayTime }}</text>
+          </view>
+          <view class="uac-info-row">
+            <text class="uac-info-key">📍 出生城市</text>
+            <text class="uac-info-val">{{ birthInfo?.birthCity }}</text>
+          </view>
+        </view>
+        <!-- 星盘缓存状态徽章 -->
+        <view class="uac-cache-row">
+          <view class="uac-cache-badge" :class="birthInfo?.hasNatalCache ? 'badge-ready' : 'badge-empty'">
+            <text class="badge-dot">●</text>
+            <text class="badge-text">本命盘</text>
+            <text class="badge-status">{{ birthInfo?.hasNatalCache ? '已计算' : '未计算' }}</text>
+          </view>
+          <view class="uac-cache-badge" :class="birthInfo?.hasSynastryCache ? 'badge-ready' : 'badge-empty'">
+            <text class="badge-dot">●</text>
+            <text class="badge-text">合盘</text>
+            <text class="badge-status">{{ birthInfo?.hasSynastryCache ? '已计算' : '未计算' }}</text>
+          </view>
+          <view class="uac-cache-badge" :class="birthInfo?.hasTransitCache ? 'badge-ready' : 'badge-empty'">
+            <text class="badge-dot">●</text>
+            <text class="badge-text">流运</text>
+            <text class="badge-status">{{ birthInfo?.hasTransitCache ? '已计算' : '未计算' }}</text>
+          </view>
+        </view>
+      </template>
+
+      <!-- 未设置出生信息 -->
+      <template v-else>
+        <view class="uac-empty">
+          <view class="uac-empty-icon-wrap">
+            <text class="uac-empty-icon">🌙</text>
+          </view>
+          <view class="uac-empty-content">
+            <text class="uac-empty-title">设置你的出生信息</text>
+            <text class="uac-empty-desc">解锁本命盘、合盘、流运全部功能</text>
+          </view>
+          <view class="uac-setup-btn" @tap.stop="goSetBirthInfo">
+            <text class="uac-setup-text">立即设置 →</text>
+          </view>
+        </view>
+      </template>
+    </view>
+
+    <!-- ░░ 2×2 功能卡片 ░░ -->
+    <view class="feature-grid">
+
+      <!-- 本命盘 -->
+      <view class="feature-card" @tap="goToNatal">
+        <view class="fc-icon-wrap fc-purple">
+          <text class="fc-icon">👤</text>
+        </view>
+        <text class="fc-label">本命盘 Natal</text>
+      </view>
+
+      <!-- 合盘 -->
+      <view class="feature-card" @tap="goToSynastry">
+        <view class="fc-icon-wrap fc-rose">
+          <text class="fc-icon">∞</text>
+        </view>
+        <text class="fc-label">合盘 Synastry</text>
+      </view>
+
+      <!-- 流运 -->
+      <view class="feature-card" @tap="goToTransit">
+        <view class="fc-icon-wrap fc-blue">
+          <text class="fc-icon">↺</text>
+        </view>
+        <text class="fc-label">流运 Transit</text>
+      </view>
+
+      <!-- AI 解读（高亮卡片） -->
+      <view class="feature-card feature-card--active" @tap="goToInterpret">
+        <view class="fc-icon-wrap fc-active">
+          <text class="fc-icon">🤖</text>
+        </view>
+        <text class="fc-label fc-label--active">AI 解读</text>
+      </view>
+
+    </view>
+
+    <!-- ░░ 今日运势 ░░ -->
+    <view class="section-block">
+      <view class="section-header">
+        <view class="section-title-row">
+          <text class="section-title-icon">🌟</text>
+          <text class="section-title">今日运势</text>
+        </view>
+        <text class="section-date">{{ monthDay }}</text>
+      </view>
+
+      <view class="fortune-card" @tap="goToDetail">
+        <view class="fortune-planet-icon" :style="{ background: todayFortune.iconBg }">
+          <text class="fortune-planet-emoji">{{ todayFortune.icon }}</text>
+        </view>
+        <view class="fortune-content">
+          <text class="fortune-headline">{{ todayFortune.planet }}进入{{ todayFortune.sign }}</text>
+          <text class="fortune-summary">{{ todayFortune.summary }}</text>
+          <view class="fortune-detail-row">
+            <text class="fortune-detail-link">查看详情</text>
+            <text class="fortune-detail-arrow"> ›</text>
           </view>
         </view>
       </view>
     </view>
 
-    <!-- ══════════════════════════════════════
-         四角功能弹窗
-    ══════════════════════════════════════ -->
-    <view v-if="showFeature" class="feature-overlay" @tap="closeFeature">
-      <view class="feature-popup" @tap.stop>
-        <view class="popup-drag-bar" />
-        <!-- 关闭 -->
-        <view class="feature-close" @tap="closeFeature">✕</view>
+    <!-- ░░ Astro AI 洞察 + 解锁专属报告 合并卡片 ░░ -->
+    <view class="section-block ai-insight-block">
+      <view class="ai-insight-header">
+        <view class="ai-header-left">
+          <text class="ai-insight-icon">✨</text>
+          <text class="ai-insight-title">Astro AI 洞察</text>
+        </view>
+        <view class="ai-badge">
+          <text class="ai-badge-text">NEW</text>
+        </view>
+      </view>
 
-        <template v-if="showFeature && FEATURE_INFO[showFeature]">
-          <view class="feature-icon-wrap" :style="{ background: FEATURE_INFO[showFeature].color + '15', borderColor: FEATURE_INFO[showFeature].color + '40' }">
-            <text class="feature-icon" :style="{ color: FEATURE_INFO[showFeature].color }">
-              {{ FEATURE_INFO[showFeature].icon }}
-            </text>
-          </view>
+      <text class="ai-insight-desc">基于你近期的星象行进，AI为你生成了一份专属的下周能量指引报告，涵盖情感、事业、财运三大维度深度分析。</text>
 
-          <text class="feature-title">{{ FEATURE_INFO[showFeature].title }}</text>
-          <text class="feature-subtitle">{{ FEATURE_INFO[showFeature].subtitle }}</text>
-          <text class="feature-desc">{{ FEATURE_INFO[showFeature].desc }}</text>
+      <!-- 预览列表 -->
+      <view class="ai-preview-list">
+        <view class="ai-preview-item">
+          <text class="ai-preview-dot" style="color: #e07428;">●</text>
+          <text class="ai-preview-text">情感运势：水星逆行影响沟通，需主动表达...</text>
+        </view>
+        <view class="ai-preview-item">
+          <text class="ai-preview-dot" style="color: #9b7fe8;">●</text>
+          <text class="ai-preview-text">事业运势：木星加持创新思维，适合启动新项目...</text>
+        </view>
+        <view class="ai-preview-item ai-preview-blur">
+          <text class="ai-preview-dot" style="color: #60b8e0;">●</text>
+          <text class="ai-preview-text">财运分析：土星稳健保守，建议规避高风险...</text>
+        </view>
+      </view>
 
-          <view class="feature-action-btn"
-            :style="{ background: 'linear-gradient(135deg, ' + FEATURE_INFO[showFeature].color + 'bb, ' + FEATURE_INFO[showFeature].color + ')' }"
-            @tap="FEATURE_INFO[showFeature].actionFn">
-            <text class="feature-action-text">{{ FEATURE_INFO[showFeature].action }}</text>
-          </view>
-        </template>
+      <!-- 解锁按钮（内嵌在卡片内） -->
+      <view class="unlock-btn-inner" @tap="goToInterpret">
+        <text class="unlock-btn-icon">🔮</text>
+        <text class="unlock-btn-text">解锁专属完整报告</text>
+        <text class="unlock-btn-arrow">→</text>
       </view>
     </view>
 
-  </view>
+    <!-- 底部安全距离 -->
+    <view style="height: 60rpx;" />
+
+  </scroll-view>
 </template>
 
 <style>
-/* ═══════════════════════════════════════════
-   太阳系星盘页 · 深色宇宙风格
-═══════════════════════════════════════════ */
+/* ══════════════════════════════════════════════
+   AstroMind 星盘首页  ·  深宇宙风格（现代动效版）
+══════════════════════════════════════════════ */
 
-.solar-page {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #0a0a1a;
+.astro-page {
+  min-height: 100vh;
+  background: #0a0818;
+  color: #e8e0ff;
+}
+
+/* ══════════════════════════════════════════════
+   太阳系动画区  ·  纯 CSS 驱动
+══════════════════════════════════════════════ */
+.solar-hero {
   position: relative;
+  width: 750rpx;
+  height: 420rpx;
   overflow: hidden;
+  background: radial-gradient(ellipse at 50% 60%, #1a1260 0%, #0a0818 70%);
 }
 
-/* ── 星空背景 ─────────────────────────────── */
-.star-bg {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  pointer-events: none;
-  z-index: 0;
-}
+/* ── 星空粒子 ─────────────────────── */
+.starfield { position: absolute; inset: 0; }
 
-.star-dot {
+.star {
   position: absolute;
   border-radius: 50%;
-  background: white;
-  animation: star-twinkle 3s ease-in-out infinite;
+  background: #fff;
+  animation: twinkle 3s ease-in-out infinite alternate;
+}
+.star-1  { width: 3rpx; height: 3rpx; top: 8%;  left: 12%; animation-delay: 0s;    opacity: 0.8; }
+.star-2  { width: 4rpx; height: 4rpx; top: 15%; left: 80%; animation-delay: 0.5s;  opacity: 0.6; }
+.star-3  { width: 3rpx; height: 3rpx; top: 25%; left: 35%; animation-delay: 1s;    opacity: 0.9; }
+.star-4  { width: 2rpx; height: 2rpx; top: 30%; left: 60%; animation-delay: 1.5s;  opacity: 0.7; }
+.star-5  { width: 4rpx; height: 4rpx; top: 5%;  left: 55%; animation-delay: 0.3s;  opacity: 0.5; }
+.star-6  { width: 3rpx; height: 3rpx; top: 50%; left: 88%; animation-delay: 2s;    opacity: 0.8; }
+.star-7  { width: 2rpx; height: 2rpx; top: 70%; left: 10%; animation-delay: 0.7s;  opacity: 0.6; }
+.star-8  { width: 4rpx; height: 4rpx; top: 60%; left: 72%; animation-delay: 1.2s;  opacity: 0.9; }
+.star-9  { width: 3rpx; height: 3rpx; top: 80%; left: 45%; animation-delay: 0.9s;  opacity: 0.7; }
+.star-10 { width: 2rpx; height: 2rpx; top: 20%; left: 20%; animation-delay: 2.5s;  opacity: 0.5; }
+.star-11 { width: 3rpx; height: 3rpx; top: 12%; left: 68%; animation-delay: 1.8s;  opacity: 0.8; }
+.star-12 { width: 4rpx; height: 4rpx; top: 88%; left: 25%; animation-delay: 0.4s;  opacity: 0.6; }
+
+@keyframes twinkle {
+  0%   { opacity: 0.2; transform: scale(0.8); }
+  100% { opacity: 1;   transform: scale(1.2); }
 }
 
-.s1  { width: 3rpx; height: 3rpx; top: 8%;  left: 12%; opacity: 0.8; animation-delay: 0s; }
-.s2  { width: 2rpx; height: 2rpx; top: 15%; left: 75%; opacity: 0.6; animation-delay: 0.5s; }
-.s3  { width: 4rpx; height: 4rpx; top: 25%; left: 35%; opacity: 0.9; animation-delay: 1s; }
-.s4  { width: 2rpx; height: 2rpx; top: 40%; left: 90%; opacity: 0.7; animation-delay: 1.5s; }
-.s5  { width: 3rpx; height: 3rpx; top: 60%; left: 5%;  opacity: 0.8; animation-delay: 0.8s; }
-.s6  { width: 2rpx; height: 2rpx; top: 70%; left: 55%; opacity: 0.6; animation-delay: 2s; }
-.s7  { width: 4rpx; height: 4rpx; top: 85%; left: 80%; opacity: 0.9; animation-delay: 0.3s; }
-.s8  { width: 3rpx; height: 3rpx; top: 90%; left: 25%; opacity: 0.7; animation-delay: 1.2s; }
-
-.nebula-glow {
+/* ── 轨道圈 ─────────────────────────── */
+.orbit {
   position: absolute;
   border-radius: 50%;
-  filter: blur(60rpx);
-  opacity: 0.06;
+  border: 1rpx solid rgba(155, 135, 209, 0.15);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
+.orbit-1 { width: 136rpx; height: 136rpx; border-color: rgba(176, 200, 224, 0.2); }
+.orbit-2 { width: 192rpx; height: 192rpx; border-color: rgba(76, 214, 160, 0.2); }
+.orbit-3 { width: 256rpx; height: 256rpx; border-color: rgba(96, 184, 224, 0.2); }
+.orbit-4 { width: 324rpx; height: 324rpx; border-color: rgba(255, 128, 112, 0.15); }
 
-.ng1 { width: 400rpx; height: 400rpx; background: #9b87d1; top: -100rpx; left: -100rpx; }
-.ng2 { width: 300rpx; height: 300rpx; background: #60b8e0; bottom: -80rpx; right: -80rpx; }
-
-@keyframes star-twinkle {
-  0%, 100% { opacity: 0.8; transform: scale(1); }
-  50%       { opacity: 0.2; transform: scale(0.5); }
-}
-
-/* ── 顶部标题栏 ─────────────────────────────── */
-.top-bar {
-  padding: 80rpx 32rpx 20rpx;
-  background: rgba(10, 10, 26, 0.7);
-  backdrop-filter: blur(20rpx);
-  border-bottom: 1rpx solid rgba(155, 135, 209, 0.15);
-  position: relative;
+/* ── 太阳 ───────────────────────────── */
+.sun-wrap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 10;
-}
-
-.top-bar-inner {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8rpx;
+  justify-content: center;
 }
 
-.top-badge {
-  background: rgba(155, 135, 209, 0.12);
-  border: 1rpx solid rgba(155, 135, 209, 0.35);
-  border-radius: 30rpx;
-  padding: 6rpx 22rpx;
-  font-size: 22rpx;
-  color: #9b87d1;
-  letter-spacing: 2rpx;
-}
-
-.top-title {
-  font-size: 40rpx;
-  font-weight: 700;
-  color: #f0eaff;
-  letter-spacing: 3rpx;
-  display: block;
-  text-shadow: 0 0 30rpx rgba(155, 135, 209, 0.5);
-}
-
-.top-sub {
-  font-size: 22rpx;
-  color: rgba(155, 135, 209, 0.6);
-  letter-spacing: 2rpx;
-  display: block;
-}
-
-/* ── 太阳系画布 ─────────────────────────────── */
-.solar-canvas-wrap {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-}
-
-/* 轨道圈 */
-.orbit-ring {
+.sun-glow {
   position: absolute;
+  width: 100rpx;
+  height: 100rpx;
   border-radius: 50%;
-  border: 1rpx solid rgba(155, 135, 209, 0.12);
-  left: 375rpx;
-  top: 375rpx;
-  pointer-events: none;
+  background: radial-gradient(circle, rgba(245, 166, 35, 0.4) 0%, transparent 70%);
+  animation: pulse-glow 2.5s ease-in-out infinite;
 }
 
-/* 行星节点 */
-.planet-node {
+@keyframes pulse-glow {
+  0%, 100% { transform: scale(1);   opacity: 0.6; }
+  50%       { transform: scale(1.5); opacity: 1;   }
+}
+
+.sun-core {
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff3b0, #F5A623 60%, #b06010);
+  box-shadow: 0 0 16rpx #F5A623, 0 0 40rpx rgba(245,166,35,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.sun-emoji {
+  font-size: 30rpx;
+  line-height: 1;
+}
+
+/* ── 行星公转轨道包裹层 ────────────────
+   原理：track 旋转 → 行星始终处于轨道边缘
+   通过 rotate 反方向让行星本体不随之旋转
+─────────────────────────────────────── */
+.planet-track {
   position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  transform-origin: 0 0;
+  animation: orbit-spin linear infinite;
+}
+
+/* 水星 */
+.track-mercury {
+  width: 136rpx;
+  height: 136rpx;
+  margin-left: -68rpx;
+  margin-top: -68rpx;
+  animation-duration: 5s;
+}
+/* 金星 */
+.track-venus {
+  width: 192rpx;
+  height: 192rpx;
+  margin-left: -96rpx;
+  margin-top: -96rpx;
+  animation-duration: 9s;
+}
+/* 地球 */
+.track-earth {
+  width: 256rpx;
+  height: 256rpx;
+  margin-left: -128rpx;
+  margin-top: -128rpx;
+  animation-duration: 14s;
+}
+/* 火星 */
+.track-mars {
+  width: 324rpx;
+  height: 324rpx;
+  margin-left: -162rpx;
+  margin-top: -162rpx;
+  animation-duration: 22s;
+}
+
+@keyframes orbit-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* 行星容器：偏移到轨道顶部中心点 */
+.planet {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* 行星点本体（反向旋转，保持朝向） */
+.planet-dot {
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 5;
 }
 
-.planet-label {
-  font-weight: bold;
-  line-height: 1;
-  z-index: 1;
+/* 水星 */
+.mercury-dot {
+  width: 12rpx; height: 12rpx;
+  background: radial-gradient(circle at 35% 35%, #d0dff0, #8090a8);
+  box-shadow: 0 0 8rpx rgba(176, 200, 224, 0.8);
 }
 
-/* 土星环效果 */
-.saturn-ring {
+/* 金星 */
+.venus-dot {
+  width: 16rpx; height: 16rpx;
+  background: radial-gradient(circle at 35% 35%, #e0f8ec, #4CD6A0);
+  box-shadow: 0 0 10rpx rgba(76, 214, 160, 0.8);
+}
+
+/* 地球 */
+.earth-dot {
+  width: 20rpx; height: 20rpx;
+  background: radial-gradient(circle at 35% 35%, #a8dff8, #1e7fc8);
+  box-shadow: 0 0 12rpx rgba(96, 184, 224, 0.8);
+  position: relative;
+  overflow: visible;
+}
+
+/* 月亮 */
+.moon-track {
   position: absolute;
-  width: 200%;
-  height: 40%;
-  border: 2rpx solid rgba(200, 184, 144, 0.6);
+  width: 36rpx;
+  height: 36rpx;
+  top: 50%;
+  left: 50%;
+  margin-top: -18rpx;
+  margin-left: -18rpx;
+  animation: orbit-spin 2.5s linear infinite;
+}
+.moon-dot {
+  position: absolute;
+  width: 6rpx;
+  height: 6rpx;
+  background: #c8c0e0;
   border-radius: 50%;
-  left: -50%;
-  top: 30%;
-  transform: rotateX(70deg);
-  pointer-events: none;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 0 4rpx rgba(200, 192, 224, 0.9);
 }
 
-/* ── 四角功能按钮 ─────────────────────────────── */
-.corner-btn {
+/* 火星 */
+.mars-dot {
+  width: 16rpx; height: 16rpx;
+  background: radial-gradient(circle at 35% 35%, #ffc0b0, #e05040);
+  box-shadow: 0 0 10rpx rgba(255, 128, 112, 0.8);
+}
+
+/* ── 标题叠加在动画区上 ─────────────── */
+.hero-overlay {
   position: absolute;
+  bottom: 24rpx;
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -533,274 +561,521 @@ function getPlanetPos(p: Planet) {
   z-index: 20;
 }
 
-.btn-tl { top: 28rpx; left: 24rpx; }
-.btn-tr { top: 28rpx; right: 24rpx; }
-.btn-bl { bottom: 90rpx; left: 24rpx; }
-.btn-br { bottom: 90rpx; right: 24rpx; }
+.hero-title {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #f0ebff;
+  letter-spacing: 3rpx;
+  text-align: center;
+  display: block;
+  text-shadow: 0 0 20rpx rgba(155, 135, 209, 0.5);
+}
 
-.corner-icon-wrap {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 24rpx;
-  border: 1.5rpx solid;
+.hero-sub {
+  font-size: 24rpx;
+  color: rgba(180, 160, 240, 0.65);
+  letter-spacing: 2rpx;
+  text-align: center;
+  display: block;
+}
+
+/* ══════════════════════════════════════════════
+   用户星盘状态卡片（user-astro-card / uac-*）
+══════════════════════════════════════════════ */
+.user-astro-card {
+  margin: 20rpx 28rpx 0;
+  background: rgba(22, 18, 48, 0.85);
+  border: 1.5rpx solid rgba(155, 135, 209, 0.2);
+  border-radius: 28rpx;
+  padding: 28rpx;
+  backdrop-filter: blur(10rpx);
+}
+
+/* ── 已设置出生信息 Header ───────── */
+.uac-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.uac-left {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.uac-icon { font-size: 30rpx; }
+
+.uac-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #e8e0ff;
+}
+
+.uac-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.uac-refresh-btn {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  background: rgba(155, 127, 232, 0.15);
+  border: 1rpx solid rgba(155, 127, 232, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(12rpx);
 }
 
-.corner-icon {
-  font-size: 32rpx;
-  font-weight: bold;
+.uac-refresh-btn:active { opacity: 0.7; }
+
+.uac-refresh-icon {
+  font-size: 28rpx;
+  color: #9b7fe8;
+  display: block;
 }
 
-.corner-label {
-  font-size: 22rpx;
-  color: rgba(200, 190, 230, 0.7);
+.uac-refresh-btn.spinning .uac-refresh-icon {
+  animation: spin360 1s linear infinite;
+}
+
+@keyframes spin360 {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.uac-edit-btn {
+  background: rgba(155, 127, 232, 0.15);
+  border: 1rpx solid rgba(155, 127, 232, 0.3);
+  border-radius: 20rpx;
+  padding: 8rpx 24rpx;
+}
+
+.uac-edit-btn:active { opacity: 0.7; }
+
+.uac-edit-text {
+  font-size: 24rpx;
+  color: #9b7fe8;
   font-weight: 500;
 }
 
-/* ── 底部提示 ─────────────────────────────── */
-.bottom-hint {
-  padding: 10rpx 0 16rpx;
-  text-align: center;
-  z-index: 10;
+/* ── 出生信息两行 ──────────────────── */
+.uac-birth-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  margin-bottom: 20rpx;
 }
 
-.hint-text {
+.uac-info-row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.uac-info-key {
+  font-size: 24rpx;
+  color: rgba(155, 135, 209, 0.7);
+  flex-shrink: 0;
+  width: 180rpx;
+}
+
+.uac-info-val {
+  font-size: 24rpx;
+  color: #d8d0f0;
+  font-weight: 500;
+  flex: 1;
+}
+
+/* ── 缓存徽章行 ────────────────────── */
+.uac-cache-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.uac-cache-badge {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+  padding: 14rpx 8rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(155, 135, 209, 0.12);
+}
+
+.uac-cache-badge.badge-ready {
+  background: rgba(80, 200, 120, 0.1);
+  border-color: rgba(80, 200, 120, 0.25);
+}
+
+.uac-cache-badge.badge-empty {
+  background: rgba(155, 135, 209, 0.07);
+}
+
+.badge-dot {
+  font-size: 16rpx;
+  line-height: 1;
+}
+
+.badge-ready .badge-dot { color: #50c878; }
+.badge-empty .badge-dot { color: rgba(155, 135, 209, 0.4); }
+
+.badge-text {
   font-size: 22rpx;
-  color: rgba(155, 135, 209, 0.45);
-  letter-spacing: 1rpx;
+  color: rgba(200, 190, 235, 0.8);
+  font-weight: 500;
+  display: block;
 }
 
-/* ── 建立星盘提示条 ─────────────────────────────── */
-.natal-prompt {
-  position: absolute;
-  bottom: 160rpx;
-  left: 24rpx;
-  right: 24rpx;
-  background: rgba(20, 18, 40, 0.92);
-  backdrop-filter: blur(20rpx);
-  border: 1.5rpx solid rgba(155, 135, 209, 0.3);
-  border-radius: 20rpx;
-  padding: 20rpx 24rpx;
+.badge-status {
+  font-size: 20rpx;
+  display: block;
+}
+
+.badge-ready .badge-status { color: #50c878; }
+.badge-empty .badge-status { color: rgba(155, 135, 209, 0.45); }
+
+/* ── 未设置出生信息 空态 ─────────── */
+.uac-empty {
   display: flex;
   align-items: center;
-  gap: 18rpx;
-  z-index: 15;
-  overflow: hidden;
+  gap: 20rpx;
 }
 
-.prompt-glow {
-  position: absolute;
-  left: -30rpx; top: -30rpx;
-  width: 120rpx; height: 120rpx;
-  background: radial-gradient(circle, rgba(155, 135, 209, 0.2), transparent 70%);
-  pointer-events: none;
-}
-
-.prompt-icon { font-size: 38rpx; flex-shrink: 0; }
-.prompt-content { flex: 1; }
-.prompt-title { font-size: 28rpx; color: #e8e0ff; font-weight: 600; display: block; margin-bottom: 4rpx; }
-.prompt-desc { font-size: 22rpx; color: rgba(155, 135, 209, 0.6); }
-.prompt-arrow { font-size: 36rpx; color: rgba(155, 135, 209, 0.5); }
-
-/* ══════════════════════════════════════
-   行星信息弹窗
-══════════════════════════════════════ */
-.planet-popup-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 15, 0.65);
-  backdrop-filter: blur(6rpx);
-  display: flex;
-  align-items: flex-end;
-  z-index: 200;
-}
-
-.planet-popup {
-  background: rgba(16, 14, 34, 0.97);
-  backdrop-filter: blur(24rpx);
-  border-top-left-radius: 36rpx;
-  border-top-right-radius: 36rpx;
-  padding: 8rpx 28rpx 60rpx;
-  width: 100%;
-  border-top: 1rpx solid rgba(155, 135, 209, 0.2);
-  box-shadow: 0 -8rpx 48rpx rgba(155, 135, 209, 0.12);
-}
-
-.popup-drag-bar {
-  width: 60rpx;
-  height: 6rpx;
-  background: rgba(155, 135, 209, 0.25);
-  border-radius: 3rpx;
-  margin: 12rpx auto 28rpx;
-}
-
-.planet-popup-header {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  margin-bottom: 28rpx;
-}
-
-.planet-popup-icon {
+.uac-empty-icon-wrap {
   width: 72rpx;
   height: 72rpx;
-  border-radius: 20rpx;
-  border: 1.5rpx solid;
+  border-radius: 50%;
+  background: rgba(155, 127, 232, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.planet-popup-symbol { font-size: 34rpx; }
+.uac-empty-icon { font-size: 36rpx; }
 
-.planet-popup-meta { flex: 1; }
-.planet-popup-name { font-size: 30rpx; color: #e8e0ff; font-weight: 700; display: block; margin-bottom: 5rpx; }
-.planet-popup-desc { font-size: 23rpx; color: rgba(155, 135, 209, 0.6); }
-
-.popup-close {
-  width: 48rpx; height: 48rpx;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28rpx; color: rgba(155, 135, 209, 0.4);
-  background: rgba(155, 135, 209, 0.08);
-  border-radius: 14rpx;
-}
-
-.planet-pos-info {
-  display: flex;
-  gap: 16rpx;
-  flex-wrap: wrap;
-}
-
-.pos-item {
+.uac-empty-content {
   flex: 1;
-  min-width: 140rpx;
-  background: rgba(30, 24, 60, 0.8);
-  border: 1.5rpx solid rgba(155, 135, 209, 0.18);
-  border-radius: 16rpx;
-  padding: 18rpx 16rpx;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 6rpx;
 }
 
-.pos-label { font-size: 22rpx; color: rgba(155, 135, 209, 0.55); }
-.pos-val { font-size: 28rpx; color: #e8e0ff; font-weight: 600; }
-
-.planet-no-data {
-  text-align: center;
-  padding: 8rpx 0;
-}
-
-.no-data-text { font-size: 25rpx; color: rgba(155, 135, 209, 0.5); display: block; margin-bottom: 20rpx; line-height: 1.6; }
-
-.no-data-btn {
-  display: inline-flex;
-  background: rgba(155, 135, 209, 0.1);
-  border: 1rpx solid rgba(155, 135, 209, 0.3);
-  border-radius: 30rpx;
-  padding: 12rpx 32rpx;
-}
-
-.no-data-btn text { font-size: 26rpx; color: #9b87d1; }
-
-/* ══════════════════════════════════════
-   四角功能弹窗
-══════════════════════════════════════ */
-.feature-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 15, 0.7);
-  backdrop-filter: blur(8rpx);
-  display: flex;
-  align-items: flex-end;
-  z-index: 200;
-}
-
-.feature-popup {
-  background: rgba(16, 14, 34, 0.98);
-  backdrop-filter: blur(28rpx);
-  border-top-left-radius: 40rpx;
-  border-top-right-radius: 40rpx;
-  padding: 8rpx 32rpx 80rpx;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14rpx;
-  border-top: 1rpx solid rgba(155, 135, 209, 0.2);
-  box-shadow: 0 -8rpx 48rpx rgba(155, 135, 209, 0.12);
-  position: relative;
-}
-
-.feature-close {
-  position: absolute;
-  top: 32rpx;
-  right: 28rpx;
-  width: 48rpx; height: 48rpx;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28rpx; color: rgba(155, 135, 209, 0.4);
-  background: rgba(155, 135, 209, 0.08);
-  border-radius: 14rpx;
-}
-
-.feature-icon-wrap {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: 28rpx;
-  border: 1.5rpx solid;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 6rpx;
-  margin-top: 10rpx;
-}
-
-.feature-icon { font-size: 44rpx; font-weight: bold; }
-
-.feature-title {
-  font-size: 40rpx;
+.uac-empty-title {
+  font-size: 28rpx;
   font-weight: 700;
   color: #e8e0ff;
   display: block;
-  text-align: center;
 }
 
-.feature-subtitle {
+.uac-empty-desc {
   font-size: 22rpx;
-  color: rgba(155, 135, 209, 0.5);
-  letter-spacing: 4rpx;
+  color: rgba(155, 135, 209, 0.6);
   display: block;
-  text-align: center;
+  line-height: 1.5;
 }
 
-.feature-desc {
-  font-size: 27rpx;
-  color: rgba(200, 190, 230, 0.65);
-  line-height: 1.75;
-  text-align: center;
-  display: block;
-  margin: 8rpx 0 16rpx;
-  padding: 0 12rpx;
-}
-
-.feature-action-btn {
-  width: 100%;
-  padding: 30rpx;
+.uac-setup-btn {
+  background: linear-gradient(135deg, #7b5cf0, #9b7fe8);
   border-radius: 20rpx;
-  text-align: center;
-  box-shadow: 0 6rpx 30rpx rgba(0,0,0,0.3);
+  padding: 14rpx 22rpx;
+  flex-shrink: 0;
 }
 
-.feature-action-text {
-  font-size: 32rpx;
-  color: white;
+.uac-setup-btn:active { opacity: 0.85; }
+
+.uac-setup-text {
+  font-size: 24rpx;
+  color: #fff;
   font-weight: 600;
-  letter-spacing: 2rpx;
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════
+   2×2 功能卡片
+══════════════════════════════════════════════ */
+.feature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20rpx;
+  padding: 24rpx 28rpx 8rpx;
+}
+
+.feature-card {
+  background: rgba(22, 18, 48, 0.85);
+  border: 1.5rpx solid rgba(155, 135, 209, 0.15);
+  border-radius: 28rpx;
+  padding: 36rpx 24rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18rpx;
+  backdrop-filter: blur(10rpx);
+}
+
+.feature-card:active { opacity: 0.85; transform: scale(0.97); }
+
+.feature-card--active {
+  background: linear-gradient(135deg, rgba(100, 70, 200, 0.35), rgba(140, 90, 220, 0.25));
+  border-color: rgba(160, 120, 240, 0.45);
+  box-shadow: 0 0 32rpx rgba(130, 90, 220, 0.2);
+}
+
+.fc-icon-wrap {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fc-purple { background: rgba(130, 90, 210, 0.25); }
+.fc-rose   { background: rgba(200, 70, 110, 0.25); }
+.fc-blue   { background: rgba(70, 150, 220, 0.25); }
+.fc-active { background: rgba(130, 90, 210, 0.3); }
+
+.fc-icon { font-size: 38rpx; line-height: 1; }
+
+.fc-label {
+  font-size: 26rpx;
+  color: rgba(210, 200, 240, 0.8);
+  font-weight: 500;
+  text-align: center;
+  display: block;
+}
+
+.fc-label--active {
+  color: #c8b0ff;
+  font-weight: 600;
+}
+
+/* ══════════════════════════════════════════════
+   通用 section 块
+══════════════════════════════════════════════ */
+.section-block {
+  margin: 24rpx 28rpx 0;
+  background: rgba(22, 18, 48, 0.75);
+  border: 1.5rpx solid rgba(155, 135, 209, 0.15);
+  border-radius: 28rpx;
+  padding: 28rpx 28rpx 24rpx;
+  backdrop-filter: blur(10rpx);
+}
+
+/* ══════════════════════════════════════════════
+   今日运势
+══════════════════════════════════════════════ */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.section-title-icon { font-size: 30rpx; }
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #e8e0ff;
+}
+
+.section-date {
+  font-size: 24rpx;
+  color: rgba(155, 135, 209, 0.6);
+}
+
+.fortune-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 22rpx;
+  background: rgba(30, 24, 58, 0.7);
+  border-radius: 20rpx;
+  padding: 24rpx;
+  border: 1rpx solid rgba(155, 135, 209, 0.1);
+}
+
+.fortune-card:active { opacity: 0.85; }
+
+.fortune-planet-icon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fortune-planet-emoji { font-size: 34rpx; line-height: 1; }
+
+.fortune-content { flex: 1; }
+
+.fortune-headline {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #f0ebff;
+  display: block;
+  margin-bottom: 10rpx;
+}
+
+.fortune-summary {
+  font-size: 24rpx;
+  color: rgba(180, 165, 220, 0.7);
+  line-height: 1.7;
+  display: block;
+  margin-bottom: 14rpx;
+}
+
+.fortune-detail-row {
+  display: flex;
+  align-items: center;
+}
+
+.fortune-detail-link {
+  font-size: 24rpx;
+  color: #9b7fe8;
+  font-weight: 500;
+}
+
+.fortune-detail-arrow {
+  font-size: 28rpx;
+  color: #9b7fe8;
+}
+
+/* ══════════════════════════════════════════════
+   AI 洞察 + 解锁报告 合并卡片
+══════════════════════════════════════════════ */
+.ai-insight-block {
+  margin-top: 20rpx;
+  background: linear-gradient(145deg, rgba(28, 16, 64, 0.9), rgba(16, 12, 42, 0.9));
+  border-color: rgba(155, 127, 232, 0.25);
+  box-shadow: 0 4rpx 32rpx rgba(100, 60, 200, 0.15);
+}
+
+.ai-insight-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.ai-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.ai-insight-icon { font-size: 30rpx; }
+
+.ai-insight-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #e8e0ff;
+}
+
+.ai-badge {
+  background: linear-gradient(135deg, #7b5cf0, #a855f7);
+  border-radius: 20rpx;
+  padding: 4rpx 14rpx;
+}
+.ai-badge-text {
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 1rpx;
+}
+
+.ai-insight-desc {
+  font-size: 26rpx;
+  color: rgba(180, 165, 220, 0.7);
+  line-height: 1.75;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+/* 预览列表 */
+.ai-preview-list {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16rpx;
+  padding: 20rpx;
+  margin-bottom: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  border: 1rpx solid rgba(155, 135, 209, 0.1);
+}
+
+.ai-preview-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+}
+
+.ai-preview-dot {
+  font-size: 18rpx;
+  line-height: 1.8;
+  flex-shrink: 0;
+}
+
+.ai-preview-text {
+  font-size: 24rpx;
+  color: rgba(200, 190, 235, 0.75);
+  line-height: 1.6;
+  display: block;
+  flex: 1;
+}
+
+/* 最后一条模糊处理（引导解锁） */
+.ai-preview-blur .ai-preview-text {
+  color: rgba(200, 190, 235, 0.3);
+  -webkit-filter: blur(3px);
+  filter: blur(3px);
+  user-select: none;
+}
+
+/* 解锁按钮（内嵌卡片） */
+.unlock-btn-inner {
+  background: linear-gradient(135deg, #7b5cf0, #9b7fe8);
+  border-radius: 20rpx;
+  padding: 28rpx 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14rpx;
+  box-shadow: 0 6rpx 24rpx rgba(123, 92, 240, 0.4);
+}
+
+.unlock-btn-inner:active {
+  opacity: 0.9;
+  transform: scale(0.98);
+}
+
+.unlock-btn-icon { font-size: 30rpx; line-height: 1; }
+
+.unlock-btn-text {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 1rpx;
+}
+
+.unlock-btn-arrow {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 700;
 }
 </style>
 

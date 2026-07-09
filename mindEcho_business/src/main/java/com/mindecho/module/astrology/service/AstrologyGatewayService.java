@@ -135,7 +135,7 @@ public class AstrologyGatewayService {
      *
      * <p>清除 DB 缓存字段后再清除 Redis 缓存，最后重新从 user_astrology 表读取出生信息计算。
      *
-     * <p>清除顺序：先写 DB（清空 natal_chart_data / natal_chart_summary）→ 再删 Redis，
+     * <p>清除顺序：先写 DB（清空 natal_chart_data）→ 再删 Redis，
      * 避免出现"Redis 已清、DB 尚未清"的窗口期导致旧数据被并发请求重新写入 Redis 的问题。
      * 此规则与 {@link UserAstrologyService#updateBirthInfo} 等缓存清空方法保持一致。
      */
@@ -148,7 +148,6 @@ public class AstrologyGatewayService {
 
         // 2. 先清除 DB 缓存字段（持久化），防止 Redis 清除后并发请求从 DB 读到旧数据再写回 Redis
         astrology.setNatalChartData(null);
-        astrology.setNatalChartSummary(null);
         userAstrologyService.updateAstrology(astrology);
 
         // 3. 再清除 Redis 缓存（DB 已清，此时即使有并发请求也会直接走 Python 重新计算）
@@ -418,8 +417,6 @@ public class AstrologyGatewayService {
     private void saveNatalChartToDb(UUID userId, UserAstrology astrology, NatalChartResponseDTO result) {
         try {
             astrology.setNatalChartData(objectMapper.writeValueAsString(result));
-            astrology.setNatalChartSummary(result.getSummary() != null
-                    ? objectMapper.writeValueAsString(result.getSummary()) : null);
             userAstrologyService.updateAstrology(astrology);
             log.info("Natal chart saved to DB: userId={}", userId);
         } catch (Exception e) {
@@ -483,14 +480,17 @@ public class AstrologyGatewayService {
     private void saveTransitChartAndDateToDb(UUID userId, UserAstrology astrology,
                                              String targetDate, TransitResponseDTO result) {
         try {
+            // 优先使用 DTO 中解析出的 date 字段，若无则用 targetDate 参数
+            String effectiveDate = org.springframework.util.StringUtils.hasText(result.getDate())
+                    ? result.getDate() : targetDate;
             java.util.Map<String, Object> wrapper = new java.util.LinkedHashMap<>();
-            wrapper.put("date", targetDate);
+            wrapper.put("date", effectiveDate);
             wrapper.put("events", result.getEvents());
             wrapper.put("summary", result.getSummary());
             astrology.setTransitChartData(objectMapper.writeValueAsString(wrapper));
-            astrology.setTransitTargetDate(targetDate);
+            astrology.setTransitTargetDate(effectiveDate);
             userAstrologyService.updateAstrology(astrology);
-            log.info("Transit chart and date saved to DB: userId={}, date={}", userId, targetDate);
+            log.info("Transit chart and date saved to DB: userId={}, date={}", userId, effectiveDate);
         } catch (Exception e) {
             log.warn("Failed to save transit chart to DB: userId={}, error={}", userId, e.getMessage());
         }
@@ -527,7 +527,10 @@ public class AstrologyGatewayService {
             // 反序列化 summary（JsonNode）
             JsonNode summary = wrapper.get("summary") != null
                     ? objectMapper.valueToTree(wrapper.get("summary")) : null;
+            // 读取持久化的 date 字段
+            String dateStr = wrapper.get("date") != null ? String.valueOf(wrapper.get("date")) : targetDate;
             return TransitResponseDTO.builder()
+                    .date(dateStr)
                     .events(events)
                     .summary(summary)
                     .build();

@@ -20,8 +20,8 @@ import java.util.UUID;
  *
  * <p>注入策略：
  * <ul>
- *   <li>仅注入出生信息 + 本命盘摘要（natal_chart_summary），轻量不冗长</li>
- *   <li>本命盘摘要（natal_chart_summary）包含太阳/月亮/上升星座等核心信息</li>
+ *   <li>仅注入出生信息 + 本命盘核心摘要，轻量不冗长</li>
+ *   <li>核心摘要从 {@code natal_chart_data} 的 {@code summary} 节点提取太阳/月亮/上升星座</li>
  *   <li>最近一次星盘解读摘要（natal_interpretation 截取前 150 字）作为补充</li>
  *   <li>若用户无星盘数据，返回 null（不注入，不影响正常聊天）</li>
  * </ul>
@@ -84,9 +84,9 @@ public class UserAstrologyContextBuilder {
                 sb.append("\n");
             }
 
-            // 本命盘摘要（natal_chart_summary 是 JSON，包含太阳/月亮/上升等核心信息）
-            if (StringUtils.hasText(astrology.getNatalChartSummary())) {
-                String summaryDesc = extractNatalSummaryDesc(astrology.getNatalChartSummary());
+            // 本命盘核心摘要：从 natal_chart_data 的 summary 节点提取太阳/月亮/上升星座
+            if (StringUtils.hasText(astrology.getNatalChartData())) {
+                String summaryDesc = extractNatalSummaryDescFromChartData(astrology.getNatalChartData());
                 if (StringUtils.hasText(summaryDesc)) {
                     sb.append("星盘核心：").append(summaryDesc).append("\n");
                 }
@@ -124,47 +124,58 @@ public class UserAstrologyContextBuilder {
     }
 
     /**
-     * 从 natal_chart_summary JSON 中提取人类可读的描述
+     * 从 {@code natal_chart_data} JSON 中提取人类可读的星座描述
      *
-     * <p>natal_chart_summary 格式示例：
+     * <p>{@code natal_chart_data} 中保存的是完整 {@link com.mindecho.module.astrology.dto.NatalChartResponseDTO}，
+     * 其 {@code summary} 节点格式示例：
      * <pre>
      * {
-     *   "sun_sign": "Virgo",
-     *   "moon_sign": "Scorpio",
-     *   "rising_sign": "Sagittarius",
-     *   "dominant_planet": "Mercury",
-     *   "dominant_element": "Earth",
-     *   "dominant_modality": "Mutable"
+     *   "sun":       { "sign": "Libra", ... },
+     *   "moon":      { "sign": "Sagittarius", ... },
+     *   "ascendant": { "sign": "Aries", ... },
+     *   ...
      * }
      * </pre>
-     * 提取后输出：「太阳Virgo 月亮Scorpio 上升Sagittarius」
+     * 提取后输出：「太阳Libra 月亮Sagittarius 上升Aries」
+     *
+     * @param natalChartDataJson {@code user_astrology.natal_chart_data} 字段值
+     * @return 人类可读描述，解析失败返回 null
      */
-    private String extractNatalSummaryDesc(String natalChartSummaryJson) {
+    private String extractNatalSummaryDescFromChartData(String natalChartDataJson) {
         try {
-            JsonNode node = objectMapper.readTree(natalChartSummaryJson);
+            JsonNode root = objectMapper.readTree(natalChartDataJson);
+            JsonNode summary = root.path("summary");
+            if (summary.isMissingNode() || summary.isNull()) {
+                return null;
+            }
 
             StringBuilder desc = new StringBuilder();
-
-            appendSignField(desc, node, "sun_sign", "太阳");
-            appendSignField(desc, node, "moon_sign", "月亮");
-            appendSignField(desc, node, "rising_sign", "上升");
-            appendSignField(desc, node, "dominant_planet", "主星");
+            appendNestedSignField(desc, summary, "sun",       "太阳");
+            appendNestedSignField(desc, summary, "moon",      "月亮");
+            appendNestedSignField(desc, summary, "ascendant", "上升");
 
             return desc.toString().trim();
         } catch (Exception e) {
-            log.debug("Failed to parse natal_chart_summary: {}", e.getMessage());
+            log.debug("Failed to extract summary from natal_chart_data: {}", e.getMessage());
             return null;
         }
     }
 
-    private void appendSignField(StringBuilder sb, JsonNode node,
-                                  String field, String label) {
-        if (node.has(field)) {
-            String value = node.get(field).asText();
-            if (StringUtils.hasText(value) && !"null".equals(value)) {
-                if (sb.length() > 0) sb.append(" ");
-                sb.append(label).append(value);
-            }
+    /**
+     * 从嵌套对象节点中读取 {@code sign} 字段并追加到描述中
+     *
+     * @param sb     目标 StringBuilder
+     * @param parent 父节点（即 summary 节点）
+     * @param key    子节点 key（如 "sun"、"moon"、"ascendant"）
+     * @param label  中文标签
+     */
+    private void appendNestedSignField(StringBuilder sb, JsonNode parent, String key, String label) {
+        JsonNode child = parent.path(key);
+        if (child.isMissingNode() || child.isNull()) return;
+        String sign = child.path("sign").asText(null);
+        if (StringUtils.hasText(sign) && !"null".equals(sign)) {
+            if (sb.length() > 0) sb.append(" ");
+            sb.append(label).append(sign);
         }
     }
 }

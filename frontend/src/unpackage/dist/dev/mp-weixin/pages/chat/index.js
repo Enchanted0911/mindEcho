@@ -391,11 +391,11 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           }, selectedMsgId.value === msg.id ? {
             m: common_vendor.o(($event) => startInlineEdit(msg.id, msg.content), msg.id)
           } : {})) : common_vendor.e({
-            n: common_vendor.t(msg.content),
-            o: msg.isStreaming && !msg.content
-          }, msg.isStreaming && !msg.content ? {} : {}, {
-            p: msg.isStreaming && msg.content
-          }, msg.isStreaming && msg.content ? {} : {}, {
+            n: msg.isStreaming && !msg.content
+          }, msg.isStreaming && !msg.content ? {} : common_vendor.e({
+            o: common_vendor.t(msg.content),
+            p: msg.isStreaming
+          }, msg.isStreaming ? {} : {}), {
             q: msg.isStreaming ? 1 : ""
           }), {
             r: msg.id,
@@ -405,22 +405,22 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
           });
         }),
         m: scrollToAnchor.value || scrollToBottom.value,
-        n: common_vendor.o(onMsgScrollToUpper, "9c"),
+        n: common_vendor.o(onMsgScrollToUpper, "3e"),
         o: isStreaming.value,
-        p: common_vendor.o(sendMessage, "38"),
+        p: common_vendor.o(sendMessage, "92"),
         q: inputText.value,
-        r: common_vendor.o(($event) => inputText.value = $event.detail.value, "be"),
+        r: common_vendor.o(($event) => inputText.value = $event.detail.value, "93"),
         s: isStreaming.value
       }, isStreaming.value ? {
-        t: common_vendor.o(handleStopStreaming, "29")
+        t: common_vendor.o(handleStopStreaming, "0e")
       } : {
         v: inputText.value.trim() ? 1 : "",
-        w: common_vendor.o(sendMessage, "84")
+        w: common_vendor.o(sendMessage, "e8")
       }, {
         x: showSessionPanel.value
       }, showSessionPanel.value ? common_vendor.e({
-        y: common_vendor.o(($event) => showSessionPanel.value = false, "ca"),
-        z: common_vendor.o(startNewChat, "bf"),
+        y: common_vendor.o(($event) => showSessionPanel.value = false, "dc"),
+        z: common_vendor.o(startNewChat, "be"),
         A: isLoadingSessions.value
       }, isLoadingSessions.value ? {} : sessions.value.length === 0 ? {} : common_vendor.e({
         C: common_vendor.f(sessions.value, (session, k0, i0) => {
@@ -436,16 +436,16 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         D: isLoadingMoreSession.value
       }, isLoadingMoreSession.value ? {} : !common_vendor.unref(chatStore).hasMoreSessions() ? {} : {}, {
         E: !common_vendor.unref(chatStore).hasMoreSessions(),
-        F: common_vendor.o(onSessionScrollToLower, "0e")
+        F: common_vendor.o(onSessionScrollToLower, "a5")
       }), {
         B: sessions.value.length === 0,
         G: common_vendor.o(() => {
-        }, "6e"),
-        H: common_vendor.o(($event) => showSessionPanel.value = false, "2c")
+        }, "02"),
+        H: common_vendor.o(($event) => showSessionPanel.value = false, "7a")
       }) : {}, {
         I: showPersonalityPicker.value
       }, showPersonalityPicker.value ? common_vendor.e({
-        J: common_vendor.o(($event) => showPersonalityPicker.value = false, "87"),
+        J: common_vendor.o(($event) => showPersonalityPicker.value = false, "25"),
         K: femalePersonalities.value.length > 0
       }, femalePersonalities.value.length > 0 ? {
         L: common_vendor.f(femalePersonalities.value, (p, k0, i0) => {
@@ -475,8 +475,8 @@ const _sfc_main = /* @__PURE__ */ common_vendor.defineComponent({
         O: common_vendor.unref(personalityStore).loading
       }, common_vendor.unref(personalityStore).loading ? {} : {}, {
         P: common_vendor.o(() => {
-        }, "c2"),
-        Q: common_vendor.o(($event) => showPersonalityPicker.value = false, "02")
+        }, "20"),
+        Q: common_vendor.o(($event) => showPersonalityPicker.value = false, "82")
       }) : {});
     };
   }

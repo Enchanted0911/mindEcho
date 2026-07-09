@@ -3,6 +3,7 @@ package com.mindecho.module.astrology.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mindecho.common.exception.BusinessException;
 import com.mindecho.common.result.ResultCode;
+import com.mindecho.module.astrology.dto.UserAstrologyInfoDTO;
 import com.mindecho.module.astrology.entity.UserAstrology;
 import com.mindecho.module.astrology.mapper.UserAstrologyMapper;
 import com.mindecho.module.auth.dto.LoginResponse;
@@ -112,7 +113,6 @@ public class UserAstrologyService {
         astrology.setBirthTime(request.getBirthTime());
         // 出生信息变更 → 清空本命盘、和盘、流运的 DB 缓存字段
         astrology.setNatalChartData(null);
-        astrology.setNatalChartSummary(null);
         astrology.setSynastryChartData(null);
         astrology.setTransitChartData(null);
         // transit_target_date 与 transit_chart_data 配套，chart 已清则目标日期一并清空，
@@ -231,6 +231,46 @@ public class UserAstrologyService {
                 .synastryPartnerTime(astrology != null ? astrology.getSynastryPartnerTime() : null)
                 // 流运目标日期（前端回填用）
                 .transitTargetDate(astrology != null ? astrology.getTransitTargetDate() : null)
+                .build();
+    }
+
+    // ─── 星盘信息汇总（供登录/首屏） ──────────────────────────────────────────
+
+    /**
+     * 获取用户星盘完整信息汇总 DTO（含出生信息、缓存标志位、对方信息、流运日期）。
+     *
+     * <p>供前端登录成功后通过 {@code GET /api/astrology/info} 调用，
+     * 一次性下发所有必要状态，避免进入各星盘页时重复请求和弹出设置表单。
+     *
+     * @param userId 当前用户 ID
+     * @return 用户星盘信息汇总 DTO
+     */
+    public UserAstrologyInfoDTO getUserAstrologyInfo(UUID userId) {
+        UserAstrology astrology = getOrInitAstrology(userId);
+
+        // 判断各缓存是否存在（DB 层面，Redis 层面由 AstrologyGatewayService 负责）
+        boolean hasNatal    = org.springframework.util.StringUtils.hasText(astrology.getNatalChartData());
+        boolean hasSynastry = org.springframework.util.StringUtils.hasText(astrology.getSynastryChartData());
+        boolean hasTransit  = org.springframework.util.StringUtils.hasText(astrology.getTransitChartData());
+
+        return UserAstrologyInfoDTO.builder()
+                // 出生信息
+                .birthCity(astrology.getBirthCity())
+                .birthLat(astrology.getBirthLat())
+                .birthLng(astrology.getBirthLng())
+                .birthTime(astrology.getBirthTime())
+                // 缓存标志位
+                .hasNatalCache(hasNatal)
+                .hasSynastryCache(hasSynastry)
+                .hasTransitCache(hasTransit)
+                // 和盘对方信息
+                .synastryPartnerName(astrology.getSynastryPartnerName())
+                .synastryPartnerCity(astrology.getSynastryPartnerCity())
+                .synastryPartnerLat(astrology.getSynastryPartnerLat())
+                .synastryPartnerLng(astrology.getSynastryPartnerLng())
+                .synastryPartnerTime(astrology.getSynastryPartnerTime())
+                // 流运目标日期
+                .transitTargetDate(astrology.getTransitTargetDate())
                 .build();
     }
 

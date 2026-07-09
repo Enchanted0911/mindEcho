@@ -5,6 +5,7 @@ import com.mindecho.common.util.UserContext;
 import com.mindecho.module.astrology.dto.*;
 import com.mindecho.module.astrology.service.AstrologyAiService;
 import com.mindecho.module.astrology.service.AstrologyGatewayService;
+import com.mindecho.module.astrology.service.UserAstrologyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +17,7 @@ import java.util.UUID;
  *
  * <p>接口清单：
  * <pre>
+ * GET  /api/astrology/info               一次获取完整 userAstrology 信息（登录/首屏调用）
  * POST /api/astrology/natal              单星盘计算（从 user 表读取出生信息，转发 Python）
  * POST /api/astrology/natal/interpret    单盘 AI 解读（chart 从 DB 读取，需先计算本命盘）
  * POST /api/astrology/synastry           和盘计算（从 user 表读取自己和对方出生信息）
@@ -32,7 +34,7 @@ import java.util.UUID;
  * <ul>
  *   <li>计算接口前置条件：user 表中已有对应的出生信息（birth_time / birth_city）</li>
  *   <li>和盘计算额外前置条件：user 表中已有对方出生信息（synastry_partner_*）</li>
- *   <li>解读接口前置条件：user 表中已有对应的星盘数据（natal_chart_data / synastry_chart_data / synastry_chart_summary）</li>
+ *   <li>解读接口前置条件：user 表中已有对应的星盘数据（natal_chart_data / synastry_chart_data）</li>
  * </ul>
  */
 @Slf4j
@@ -43,6 +45,25 @@ public class AstrologyController {
 
     private final AstrologyGatewayService gatewayService;
     private final AstrologyAiService aiService;
+    private final UserAstrologyService userAstrologyService;
+
+    // ─────────────────────── 星盘信息汇总 ────────────────────────────────
+
+    /**
+     * 一次获取完整 userAstrology 信息（登录/首屏调用）
+     *
+     * <p>返回用户出生信息、各类星盘缓存标志位、和盘对方信息、流运目标日期。
+     * 前端登录成功后应调用此接口，将结果缓存到 store，避免进入各星盘页时重复弹出设置表单。
+     *
+     * GET /api/astrology/info
+     */
+    @GetMapping("/info")
+    public Result<UserAstrologyInfoDTO> getAstrologyInfo() {
+        UUID userId = UserContext.getUserId();
+        log.info("Get astrology info: userId={}", userId);
+        UserAstrologyInfoDTO info = userAstrologyService.getUserAstrologyInfo(userId);
+        return Result.success(info);
+    }
 
     // ─────────────────────── 单星盘（本命盘）─────────────────────────────
 
@@ -51,7 +72,7 @@ public class AstrologyController {
      *
      * <p>无需传出生信息，后端从 user 表读取；
      * 若用户未设置出生信息，返回 7001 错误，前端应引导用户先设置出生信息。
-     * 计算结果同时持久化到 user 表的 natal_chart_data / natal_chart_summary 字段。
+     * 计算结果同时持久化到 user 表的 natal_chart_data 字段（summary 信息包含在其中）。
      *
      * POST /api/astrology/natal
      */

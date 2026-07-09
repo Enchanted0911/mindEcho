@@ -76,6 +76,8 @@ public class AstrologyPythonClient {
     private static final String FIELD_THEMES         = "themes";
     private static final String FIELD_DOMINANT_THEMES = "dominant_themes";
     private static final String FIELD_RELATIONSHIP_MODEL = "relationship_model";
+    /** Python 有时以驼峰形式返回 relationship_model */
+    private static final String FIELD_RELATIONSHIP_MODEL_CAMEL = "relationshipModel";
     private static final String FIELD_SUMMARY        = "summary";
     private static final String FIELD_PLANETS        = "planets";
     private static final String FIELD_ANGLES         = "angles";
@@ -184,13 +186,15 @@ public class AstrologyPythonClient {
 
             JsonNode root = objectMapper.readTree(responseBody);
 
-            // Python /internal/synastry 返回结构为 { "<pairHash>": { aspects, relationship_model, ... } }
+            // Python /internal/synastry 返回结构为 { "<pairHash>": { aspects, relationshipModel/relationship_model, ... } }
             // 需要先取第一个 value 节点（即 pairHash 对应的数据），再解析内部字段
             JsonNode data = root;
             if (root.isObject() && root.size() == 1) {
                 JsonNode firstValue = root.fields().next().getValue();
-                // 若第一层的 value 本身包含 aspects / relationship_model 等字段，则说明是嵌套结构
-                if (firstValue.isObject() && (firstValue.has(FIELD_ASPECTS) || firstValue.has(FIELD_RELATIONSHIP_MODEL))) {
+                // 若第一层的 value 本身包含 aspects / relationship_model / relationshipModel 等字段，则说明是嵌套结构
+                if (firstValue.isObject() && (firstValue.has(FIELD_ASPECTS)
+                        || firstValue.has(FIELD_RELATIONSHIP_MODEL)
+                        || firstValue.has(FIELD_RELATIONSHIP_MODEL_CAMEL))) {
                     data = firstValue;
                     log.debug("Synastry: detected pairHash-wrapped response, unwrapped to inner data node");
                 }
@@ -208,8 +212,13 @@ public class AstrologyPythonClient {
                 data.get(FIELD_THEMES).forEach(n -> themes.add(n.asText()));
             }
 
+            // 兼容 relationship_model（下划线）和 relationshipModel（驼峰）两种字段名
+            JsonNode relationshipModelNode = data.has(FIELD_RELATIONSHIP_MODEL)
+                    ? data.get(FIELD_RELATIONSHIP_MODEL)
+                    : data.get(FIELD_RELATIONSHIP_MODEL_CAMEL);
+
             return SynastryResponseDTO.builder()
-                    .relationshipModel(data.get(FIELD_RELATIONSHIP_MODEL))
+                    .relationshipModel(relationshipModelNode)
                     .aspects(aspects)
                     .themes(themes)
                     .chart(data)
@@ -257,14 +266,21 @@ public class AstrologyPythonClient {
 
             JsonNode root = objectMapper.readTree(responseBody);
 
+            // 解析顶层 date 字段（Python 返回如 "2026-06-02"）
+            String dateField = root.has("date") ? root.get("date").asText(null) : null;
+
             List<JsonNode> events = new ArrayList<>();
-            if (root.has("events") && root.get("events").isArray()) {
-                root.get("events").forEach(events::add);
+            if (root.has(FIELD_EVENTS) && root.get(FIELD_EVENTS).isArray()) {
+                root.get(FIELD_EVENTS).forEach(events::add);
             }
 
+            // summary 字段：Python 返回 { emotional_state, energy_level, life_focus }
+            JsonNode summaryNode = root.has(FIELD_SUMMARY) ? root.get(FIELD_SUMMARY) : null;
+
             return TransitResponseDTO.builder()
+                    .date(dateField)
                     .events(events)
-                    .summary(root.get("summary"))
+                    .summary(summaryNode)
                     .build();
         } catch (BusinessException e) {
             throw e;

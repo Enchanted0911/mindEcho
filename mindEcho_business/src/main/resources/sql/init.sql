@@ -43,7 +43,6 @@ CREATE TABLE IF NOT EXISTS user_astrology (
     birth_time              VARCHAR(20)     DEFAULT NULL,
     -- 本命盘
     natal_chart_data        TEXT            DEFAULT NULL,
-    natal_chart_summary     TEXT            DEFAULT NULL,
     natal_interpretation    TEXT            DEFAULT NULL,    -- 本命盘 AI 解读文本（最近一次）
     -- 和盘
     synastry_chart_data     TEXT            DEFAULT NULL,
@@ -366,5 +365,12 @@ CREATE INDEX IF NOT EXISTS idx_ai_usage_session_id ON ai_usage_record(session_id
 CREATE INDEX IF NOT EXISTS idx_ai_usage_status ON ai_usage_record(status);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_business_type ON ai_usage_record(business_type);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_created_time ON ai_usage_record(created_time);
+
+
+-- ─────────────────────── 数据库迁移 ───────────────────────
+-- 2026-06-04: 移除 user_astrology.natal_chart_summary 冗余字段
+-- 背景：natal_chart_data 字段已完整包含 summary 信息（返回结构中 summary 节点），
+--       natal_chart_summary 单独存储造成数据冗余，统一从 natal_chart_data 中读取。
+ALTER TABLE user_astrology DROP COLUMN IF EXISTS natal_chart_summary;
 
 

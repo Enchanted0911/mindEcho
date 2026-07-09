@@ -1,11 +1,11 @@
 package com.mindecho.module.astrology.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mindecho.common.util.UserContext;
 import com.mindecho.module.astrology.dto.*;
 import com.mindecho.module.astrology.service.AstrologyAiService;
 import com.mindecho.module.astrology.service.AstrologyGatewayService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,6 +29,10 @@ import java.util.UUID;
  *   → 返回结构化结果
  * </pre>
  *
+ * <p>userId 通过 Spring AI {@link ToolContext} 传递，由 {@code ChatService} 在调用时通过
+ * {@code .toolContext(Map.of("userId", userId))} 注入，避免 Reactor {@code boundedElastic}
+ * 线程切换导致 ThreadLocal 丢失的问题。
+ *
  * <p>注意：ObjectMapper 通过构造函数注入并指定 {@code @Qualifier("webObjectMapper")}，
  * 不可使用 Lombok {@code @RequiredArgsConstructor}，因为 Lombok 生成的构造函数不携带
  * 字段上的 {@code @Qualifier} 注解，会导致 Spring 注入错误的 Bean。
@@ -49,6 +53,39 @@ public class AstrologyTools {
         this.objectMapper = objectMapper;
     }
 
+    // ─────────────────────── 工具上下文工具方法 ────────────────────────────────
+
+    /**
+     * 从 Spring AI ToolContext 中提取 userId。
+     *
+     * <p>userId 由 {@code ChatService} 通过 {@code .toolContext(Map.of("userId", userId))}
+     * 注入，在工具被调用时由 {@link org.springframework.ai.tool.method.MethodToolCallback}
+     * 自动将 {@link ToolContext} 注入到方法参数中。
+     *
+     * @param toolContext Spring AI 注入的工具上下文
+     * @return 用户 ID，若未找到则返回 null
+     */
+    private UUID resolveUserId(ToolContext toolContext) {
+        if (toolContext == null || toolContext.getContext() == null) {
+            log.warn("[AstrologyTool] ToolContext is null, userId cannot be resolved");
+            return null;
+        }
+        Object value = toolContext.getContext().get("userId");
+        if (value instanceof UUID) {
+            return (UUID) value;
+        }
+        if (value instanceof String) {
+            try {
+                return UUID.fromString((String) value);
+            } catch (IllegalArgumentException e) {
+                log.warn("[AstrologyTool] Invalid UUID string in ToolContext: {}", value);
+                return null;
+            }
+        }
+        log.warn("[AstrologyTool] userId not found in ToolContext, keys={}", toolContext.getContext().keySet());
+        return null;
+    }
+
     // ─────────────────────── 本命盘 ───────────────────────────────────────────
 
     /**
@@ -60,10 +97,14 @@ public class AstrologyTools {
           description = "计算用户本命星盘数据（Natal Chart）。" +
                         "出生信息自动从用户档案中读取，无需额外提供。" +
                         "返回行星位置、上升点、宫位等完整星盘 JSON 数据，用于后续 AI 解读。")
-    public String calculateNatal() {
+    public String calculateNatal(ToolContext toolContext) {
         try {
-            UUID userId = UserContext.getUserId();
+            UUID userId = resolveUserId(toolContext);
             log.info("[AstrologyTool] calculateNatal: userId={}", userId);
+
+            if (userId == null) {
+                return "{\"error\": \"用户未登录，无法计算本命盘\"}";
+            }
 
             NatalChartResponseDTO result = gatewayService.getNatalChart(userId);
             return objectMapper.writeValueAsString(result);
@@ -76,7 +117,7 @@ public class AstrologyTools {
     /**
      * 对本命盘进行 AI 解读
      *
-     * <p>星盘数据自动从用户 Profile 读取，通常在 {@link #calculateNatal} 之后调用。
+     * <p>星盘数据自动从用户 Profile 读取，通常在 {@link #calculateNatal(ToolContext)} 之后调用。
      */
     @Tool(name = "astrology_interpret_natal",
           description = "对本命盘（Natal Chart）进行 AI 占星解读。" +
@@ -84,10 +125,15 @@ public class AstrologyTools {
                         "focus 参数控制解读重点：personality（性格）、career（事业）、emotion（情感）、growth（成长），不填则全面解读。")
     public String interpretNatal(
             @ToolParam(description = "解读焦点：personality（性格/潜能）、career（事业/天赋）、emotion（情感模式）、growth（成长方向），留空则全面解读") String focus,
-            @ToolParam(description = "解读语气：gentle（温柔）、rational（理性）、deep（深度心理），默认 gentle") String tone) {
+            @ToolParam(description = "解读语气：gentle（温柔）、rational（理性）、deep（深度心理），默认 gentle") String tone,
+            ToolContext toolContext) {
         try {
-            UUID userId = UserContext.getUserId();
+            UUID userId = resolveUserId(toolContext);
             log.info("[AstrologyTool] interpretNatal: userId={}, focus={}", userId, focus);
+
+            if (userId == null) {
+                return "用户未登录，无法解读本命盘";
+            }
 
             AstrologyInterpretRequestDTO request = new AstrologyInterpretRequestDTO();
             request.setFocus(focus);
@@ -114,10 +160,14 @@ public class AstrologyTools {
           description = "计算两人合盘（Synastry Chart），分析两人星盘的相互关系和兼容性。" +
                         "双方出生信息均自动从用户档案中读取（自己的出生信息 + 上次设置的合盘对方信息），无需额外提供。" +
                         "若用户想分析不同对象，请先通过个人设置更新合盘对方信息。含 30 天缓存。")
-    public String calculateSynastry() {
+    public String calculateSynastry(ToolContext toolContext) {
         try {
-            UUID userId = UserContext.getUserId();
+            UUID userId = resolveUserId(toolContext);
             log.info("[AstrologyTool] calculateSynastry: userId={}", userId);
+
+            if (userId == null) {
+                return "{\"error\": \"用户未登录，无法计算合盘\"}";
+            }
 
             SynastryResponseDTO result = gatewayService.getSynastryChart(userId);
             return objectMapper.writeValueAsString(result);
@@ -139,10 +189,15 @@ public class AstrologyTools {
     public String interpretSynastry(
             @ToolParam(description = "关系类型：romantic（恋人）、friend（朋友）、family（家人）、colleague（同事），留空默认 romantic") String relationshipType,
             @ToolParam(description = "解读焦点：compatibility（兼容性）、dynamic（关系动力）、challenge（关系挑战）、growth（共同成长），留空则全面解读") String focus,
-            @ToolParam(description = "解读语气：gentle（温柔）、rational（理性）、deep（深度），默认 gentle") String tone) {
+            @ToolParam(description = "解读语气：gentle（温柔）、rational（理性）、deep（深度），默认 gentle") String tone,
+            ToolContext toolContext) {
         try {
-            UUID userId = UserContext.getUserId();
+            UUID userId = resolveUserId(toolContext);
             log.info("[AstrologyTool] interpretSynastry: userId={}, focus={}", userId, focus);
+
+            if (userId == null) {
+                return "用户未登录，无法解读合盘";
+            }
 
             SynastryInterpretRequestDTO request = new SynastryInterpretRequestDTO();
             request.setRelationshipType(relationshipType != null && !relationshipType.isBlank() ? relationshipType : "romantic");
@@ -168,13 +223,18 @@ public class AstrologyTools {
           description = "计算指定日期的流运（Transit），分析当前行星过境对本命盘的影响。" +
                         "出生信息自动从用户档案读取，只需提供目标查询日期（可选）。含 24 小时缓存。")
     public String calculateTransit(
-            @ToolParam(description = "目标查询日期，格式 yyyy-MM-dd，如 2026-05-29。留空则使用今天") String targetDate) {
+            @ToolParam(description = "目标查询日期，格式 yyyy-MM-dd，如 2026-05-29。留空则使用今天") String targetDate,
+            ToolContext toolContext) {
         try {
-            UUID userId = UserContext.getUserId();
+            UUID userId = resolveUserId(toolContext);
             String date = (targetDate != null && !targetDate.isBlank())
                     ? targetDate
                     : java.time.LocalDate.now().toString();
             log.info("[AstrologyTool] calculateTransit: userId={}, date={}", userId, date);
+
+            if (userId == null) {
+                return "{\"error\": \"用户未登录，无法计算流运\"}";
+            }
 
             TransitRequestDTO request = new TransitRequestDTO();
             request.setTargetDate(date);
@@ -198,10 +258,15 @@ public class AstrologyTools {
                         "focus 参数：current（当下状态）、love（情感变化）、career（事业机遇）、advice（近期建议）。")
     public String interpretTransit(
             @ToolParam(description = "解读焦点：current（当下状态）、love（情感变化）、career（事业机遇）、advice（近期建议），留空则全面解读") String focus,
-            @ToolParam(description = "解读语气：gentle（温柔）、rational（理性）、deep（深度），默认 gentle") String tone) {
+            @ToolParam(description = "解读语气：gentle（温柔）、rational（理性）、deep（深度），默认 gentle") String tone,
+            ToolContext toolContext) {
         try {
-            UUID userId = UserContext.getUserId();
+            UUID userId = resolveUserId(toolContext);
             log.info("[AstrologyTool] interpretTransit: userId={}, focus={}", userId, focus);
+
+            if (userId == null) {
+                return "用户未登录，无法解读流运";
+            }
 
             TransitInterpretRequestDTO request = new TransitInterpretRequestDTO();
             request.setFocus(focus);
