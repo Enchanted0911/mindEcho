@@ -1,7 +1,7 @@
 ---
 name: object-conversion-checker
 description: Checks DTO/BO/DO/Entity object conversion and data-class style per project standards. Validates BO→DO/DO→Entity placement (BO/DO methods vs Converter), Converter static/no-injection, and recommends Lombok @Data to replace hand-written getters/setters. Use when reviewing or writing Converter code, BO/DO/Entity classes, or when the user asks to check object conversion or remove get/set methods.
-version: "1.0.0"
+version: "1.1.0"
 ---
 
 # 对象转换与数据类规范检查
@@ -89,12 +89,108 @@ public class TaskDO {
 
 ## 4. 检查流程（推荐顺序）
 
-1. **定位转换**：找出所有 BO→DO、DO→Entity、DTO↔BO 的调用与定义
+1. **定位转换**：找出所有 BO→DO、DO→Entity、DTO↔BO、**Kafka 消息 ↔ DO** 的调用与定义
 2. **对照 §2**：确认简单/复杂归属、Converter 所在层、是否静态/无注入、是否调用了服务实现类做转换
 3. **对照 §3**：对纯数据类建议加 @Data 并删除手写 getter/setter，保留 BO/DO 上的 toXxx/fromXxx 方法
-4. **输出**：列出违规项（含文件与行号/片段）与修改建议；对可改为 @Data 的类列出清单
+4. **对照 §5**：检查 Kafka 消息体的序列化/反序列化转换是否符合规范
+5. **输出**：列出违规项（含文件与行号/片段）与修改建议；对可改为 @Data 的类列出清单
 
-## 5. 规范来源
+## 5. Kafka 消息体转换规范
+
+### 5.1 转换职责
+
+| 转换方向 | 位置 | 说明 |
+|----------|------|------|
+| DO → Kafka 消息体 | `domain/.../converter/` 或 DO 的 `toMessage()` | 领域对象转换为 Kafka 消息 |
+| Kafka 消息体 → DO | 消费者入口处，在消费者类内部直接完成 | 消息反序列化后立即转换 |
+
+### 5.2 消息体独立定义
+
+Kafka 消息体应与 DO/Entity 独立定义，不共用同一类：
+
+```java
+// ✅ 正确：消息体独立定义
+public record OrderPlacedMessage(
+    String eventId,
+    String orderId,
+    String customerId,
+    BigDecimal amount,
+    String region,
+    Long timestamp,          // 消息产生时间戳
+    String eventVersion      // Schema 版本号
+) {}
+
+// 转换在 DO 或 Converter 中
+public class OrderDO {
+    public OrderPlacedMessage toPlacedMessage() {
+        return new OrderPlacedMessage(
+            UUID.randomUUID().toString(),
+            this.orderId,
+            this.customerId,
+            this.amount,
+            this.region,
+            System.currentTimeMillis(),
+            "1.0"
+        );
+    }
+}
+```
+
+### 5.3 反序列化 → 领域对象
+
+```java
+@Component
+public class OrderEventConsumer {
+
+    private final OrderService orderService;
+
+    @KafkaListener(topics = "orders.order.created", groupId = "order-service")
+    public void consume(OrderPlacedMessage message) {
+        OrderDO order = OrderDO.fromPlacedMessage(message);
+        orderService.process(order);
+    }
+}
+```
+
+### 5.4 Avro / Protobuf 转换（高级场景）
+
+使用 Schema Registry 或多语言互操作时：
+
+```java
+// 生产者：DO → Avro SpecificRecord
+public class OrderDO {
+    public OrderPlacedAvro toAvro() {
+        return OrderPlacedAvro.newBuilder()
+            .setEventId(UUID.randomUUID().toString())
+            .setOrderId(this.orderId)
+            .setAmount(this.amount.doubleValue())
+            .setRegion(this.region)
+            .setTimestamp(System.currentTimeMillis())
+            .build();
+    }
+}
+
+// 消费者：Avro → DO
+@Component
+public class OrderAvroConsumer {
+
+    @KafkaListener(topics = "orders.order.created", groupId = "order-service")
+    public void consume(OrderPlacedAvro record) {
+        OrderDO order = OrderDO.fromAvro(record);
+        orderService.process(order);
+    }
+}
+```
+
+### 5.5 消息体检查清单
+
+- [ ] Kafka 消息体是否与 DO/Entity 独立定义（不共用类）？
+- [ ] 消息体是否包含 `eventId`（幂等去重）、`region`（数据隔离）、`timestamp`、`eventVersion`？
+- [ ] 生产者端转换是否在 DO 方法或 domain Converter 中（不在消费者/应用层）？
+- [ ] 反序列化后的转换是否在消费者入口方法内直接完成？
+- [ ] 若使用 Avro/Protobuf，Schema 文件是否纳入版本控制？
+
+## 6. 规范来源
 
 - 转换职责与 Converter 约定：[对象转换规范](specrules/03_coding/object_conversion_standards.md)
 - 数据对象命名与层级：[数据对象命名](specrules/00_general/naming/data_object_naming.md)
@@ -104,4 +200,5 @@ public class TaskDO {
 
 ## 版本与变更
 
+- 1.1.0 (2025-07-09): 新增 §5 Kafka 消息体转换规范（消息体独立定义、DO↔消息转换、Avro/Protobuf 高级场景、消息体检查清单）。
 - 1.0.0 (2025-02-06): 初始版本；对象转换职责与 Converter 检查清单、@Data 数据类风格建议。
